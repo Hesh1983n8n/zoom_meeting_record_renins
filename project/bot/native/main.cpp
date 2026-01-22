@@ -1,10 +1,19 @@
+#include <dlfcn.h>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <string>
+#include <thread>
 #include <vector>
+
+#include "meeting_service_interface.h"
+#include "zoom_sdk.h"
+#include "zoom_sdk_raw_data_def.h"
+#include "zoom_sdk_raw_data.h"
+
+using namespace ZOOM_SDK_NAMESPACE;
 
 struct Args {
   std::string meeting_id;
@@ -51,6 +60,83 @@ void WriteMetadata(const std::string &out_dir, const std::string &meeting_id) {
   metadata << "}\n";
 }
 
+class MeetingEventHandler : public IMeetingServiceEvent {
+ public:
+  void onMeetingStatusChanged(MeetingStatus status, int iResult) override {
+    std::cout << "[recorder] meeting_status status=" << static_cast<int>(status)
+              << " result=" << iResult << std::endl;
+  }
+};
+
+class AudioRawDelegate : public IZoomSDKAudioRawDataDelegate {
+ public:
+  explicit AudioRawDelegate(const std::string &out_dir) : out_dir_(out_dir) {}
+
+  void onMixedAudioRawDataReceived(AudioRawData *data) override {
+    if (!first_packet_logged_) {
+      std::cout << "[recorder] first_audio_packet_received mode=mixed" << std::endl;
+      first_packet_logged_ = true;
+    }
+    WriteWavChunk(data, out_dir_ + "/mixed/chunks", "mixed");
+  }
+
+  void onOneWayAudioRawDataReceived(AudioRawData *data, unsigned int userId) override {
+    if (!first_packet_logged_) {
+      std::cout << "[recorder] first_audio_packet_received mode=per_user" << std::endl;
+      first_packet_logged_ = true;
+    }
+    WriteWavChunk(data, out_dir_ + "/users/" + std::to_string(userId) + "/chunks",
+                  std::to_string(userId));
+  }
+
+ private:
+  void WriteWavChunk(AudioRawData *data, const std::string &dir, const std::string &prefix) {
+    if (!data) {
+      return;
+    }
+    std::string mkdir_cmd = "mkdir -p " + dir;
+    std::ignore = std::system(mkdir_cmd.c_str());
+
+    auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+    std::string file_path = dir + "/" + prefix + "_" + std::to_string(now) + ".wav";
+    std::ofstream out(file_path, std::ios::binary);
+    if (!out.is_open()) {
+      return;
+    }
+
+    int sample_rate = data->GetSampleRate();
+    int channels = data->GetChannelNum();
+    int data_len = data->GetBufferLen();
+    const char *buffer = static_cast<const char *>(data->GetBuffer());
+
+    int byte_rate = sample_rate * channels * 2;
+    int block_align = channels * 2;
+    int data_size = data_len;
+    int file_size = 36 + data_size;
+
+    out.write("RIFF", 4);
+    out.write(reinterpret_cast<const char *>(&file_size), 4);
+    out.write("WAVE", 4);
+    out.write("fmt ", 4);
+    int fmt_chunk_size = 16;
+    short audio_format = 1;
+    out.write(reinterpret_cast<const char *>(&fmt_chunk_size), 4);
+    out.write(reinterpret_cast<const char *>(&audio_format), 2);
+    out.write(reinterpret_cast<const char *>(&channels), 2);
+    out.write(reinterpret_cast<const char *>(&sample_rate), 4);
+    out.write(reinterpret_cast<const char *>(&byte_rate), 4);
+    out.write(reinterpret_cast<const char *>(&block_align), 2);
+    short bits_per_sample = 16;
+    out.write(reinterpret_cast<const char *>(&bits_per_sample), 2);
+    out.write("data", 4);
+    out.write(reinterpret_cast<const char *>(&data_size), 4);
+    out.write(buffer, data_size);
+  }
+
+  bool first_packet_logged_ = false;
+  std::string out_dir_;
+};
+
 int main(int argc, char **argv) {
   Args args;
   if (!ParseArgs(argc, argv, args)) {
@@ -58,14 +144,70 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  std::cout << "[recorder] init_sdk OK" << std::endl;
-  std::cout << "[recorder] join FAIL code=SDK_NOT_LINKED" << std::endl;
-  std::cout << "[recorder] subscribe_audio FAIL code=SDK_NOT_LINKED" << std::endl;
-  std::cout << "[recorder] meeting_ended reason=SDK_NOT_LINKED" << std::endl;
+  const char *ld_path = std::getenv("LD_LIBRARY_PATH");
+  std::cout << "[recorder] LD_LIBRARY_PATH=" << (ld_path ? ld_path : "") << std::endl;
+
+  void *handle = dlopen("libzoomsdk.so", RTLD_NOW | RTLD_GLOBAL);
+  if (!handle) {
+    std::cerr << "[recorder] dlopen libzoomsdk.so FAIL " << dlerror() << std::endl;
+  } else {
+    std::cout << "[recorder] dlopen libzoomsdk.so OK" << std::endl;
+    dlclose(handle);
+  }
+
+  InitParam init_param;
+  init_param.strWebDomain = "https://zoom.us";
+  init_param.enableLog = true;
+  SDKError init_ret = InitSDK(init_param);
+  std::cout << "[recorder] init_sdk code=" << static_cast<int>(init_ret) << std::endl;
+  if (init_ret != SDKERR_SUCCESS) {
+    return 2;
+  }
+
+  IMeetingService *meeting_service = nullptr;
+  SDKError meeting_ret = CreateMeetingService(&meeting_service);
+  std::cout << "[recorder] create_meeting_service code=" << static_cast<int>(meeting_ret)
+            << std::endl;
+  if (meeting_ret != SDKERR_SUCCESS || !meeting_service) {
+    return 3;
+  }
+
+  MeetingEventHandler meeting_events;
+  meeting_service->SetEvent(&meeting_events);
+
+  JoinParam join_param;
+  join_param.userType = SDK_UT_WITHOUT_LOGIN;
+  JoinParam4WithoutLogin &join_without_login = join_param.param.withoutlogin;
+  join_without_login.meetingNumber = std::stoull(args.meeting_id);
+  join_without_login.psw = args.passcode.c_str();
+  join_without_login.userName = args.display_name.c_str();
+  join_without_login.userZAK = "";
+  join_without_login.appPriviledgeToken = args.signature.c_str();
+
+  std::cout << "[recorder] join_meeting start" << std::endl;
+  SDKError join_ret = meeting_service->Join(join_param);
+  std::cout << "[recorder] join code=" << static_cast<int>(join_ret) << std::endl;
+
+  IZoomSDKAudioRawDataHelper *audio_helper = GetAudioRawdataHelper();
+  if (!audio_helper) {
+    std::cerr << "[recorder] subscribe_audio FAIL helper_null" << std::endl;
+  } else {
+    AudioRawDelegate audio_delegate(args.out_dir);
+    SDKError sub_ret = audio_helper->subscribe(&audio_delegate);
+    std::cout << "[recorder] subscribe_audio code=" << static_cast<int>(sub_ret) << std::endl;
+  }
 
   std::string mkdir_cmd = "mkdir -p " + args.out_dir + "/users " + args.out_dir + "/mixed";
   std::ignore = std::system(mkdir_cmd.c_str());
   WriteMetadata(args.out_dir, args.meeting_id);
 
+  std::this_thread::sleep_for(std::chrono::seconds(5));
+
+  if (audio_helper) {
+    audio_helper->unSubscribe();
+  }
+
+  CleanUPSDK();
+  std::cout << "[recorder] meeting_ended" << std::endl;
   return 0;
 }

@@ -6,14 +6,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(zoom_bot_recorder main.cpp)
 
-target_include_directories(zoom_bot_recorder PRIVATE /app/zoom_sdk/include)
+set(ZOOM_SDK_LIB "/app/zoom_sdk/lib")
+target_include_directories(zoom_bot_recorder PRIVATE "/app/zoom_sdk/include")
+link_directories("${ZOOM_SDK_LIB}")
 
-file(GLOB ZOOM_SDK_LIBS "/app/zoom_sdk/lib/*.so" "/app/zoom_sdk/lib/*.a")
-if(ZOOM_SDK_LIBS)
-  target_link_libraries(zoom_bot_recorder PRIVATE ${ZOOM_SDK_LIBS})
+find_library(ZOOMSDK_LIB zoomsdk PATHS "${ZOOM_SDK_LIB}" NO_DEFAULT_PATH)
+if(NOT ZOOMSDK_LIB)
+  message(FATAL_ERROR "Zoom SDK library not found in ${ZOOM_SDK_LIB}")
 endif()
 
+target_link_libraries(zoom_bot_recorder PRIVATE
+  ${ZOOMSDK_LIB}
+  pthread
+  dl
+)
+
 set_target_properties(zoom_bot_recorder PROPERTIES
-  BUILD_RPATH "/app/zoom_sdk/lib"
-  INSTALL_RPATH "/app/zoom_sdk/lib"
+  BUILD_RPATH "${ZOOM_SDK_LIB}"
+  INSTALL_RPATH "${ZOOM_SDK_LIB}"
 )

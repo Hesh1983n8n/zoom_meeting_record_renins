@@ -25,6 +25,10 @@ RUN cmake -S /app/native -B /app/native/build \
     && cp /app/native/build/zoom_bot_recorder /app/bin/zoom_bot_recorder \
     && cp /app/tools/merge_audio.sh /app/bin/merge_audio
 
+RUN ls -lah /app/zoom_sdk/lib \
+    && ldd /app/bin/zoom_bot_recorder | tee /tmp/ldd.txt \
+    && ! grep -q "not found" /tmp/ldd.txt
+
 RUN chmod +x /app/bin/merge_audio /app/bin/zoom_bot_recorder \
     && test -x /app/bin/zoom_bot_recorder
 

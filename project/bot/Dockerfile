@@ -28,6 +28,12 @@ RUN echo "=== LIST /app/zoom_sdk ===" \
     && echo "=== FIND SDK FILES (h/so/a) ===" \
     && find /app/zoom_sdk -maxdepth 4 -type f \( -name "*.h" -o -name "*.so" -o -name "*.a" \) | head -n 200
 
+RUN echo "=== RAW/AUDIO HEADERS ===" \
+    && find /app/zoom_sdk/include -maxdepth 4 -type f -iname "*raw*" -o -iname "*audio*" | head -n 200
+
+RUN grep -R "IZoomSDKAudioRawDataHelper" -n /app/zoom_sdk/include | head -n 50 || true
+RUN grep -R "rawdata_audio_helper_interface" -n /app/zoom_sdk/include | head -n 50 || true
+
 RUN cmake -S /app/native -B /app/native/build \
     && cmake --build /app/native/build --config Release \
     && mkdir -p /app/bin \

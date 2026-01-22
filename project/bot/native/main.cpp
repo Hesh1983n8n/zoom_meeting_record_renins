@@ -11,7 +11,16 @@
 #include "meeting_service_interface.h"
 #include "zoom_sdk.h"
 #include "zoom_sdk_raw_data_def.h"
-#include "zoom_sdk_raw_data.h"
+
+#if __has_include("rawdata_audio_helper_interface.h")
+#include "rawdata_audio_helper_interface.h"
+#define ZOOMSDK_HAS_RAW_AUDIO 1
+#elif __has_include("rawdata/rawdata_audio_helper_interface.h")
+#include "rawdata/rawdata_audio_helper_interface.h"
+#define ZOOMSDK_HAS_RAW_AUDIO 1
+#else
+#define ZOOMSDK_HAS_RAW_AUDIO 0
+#endif
 
 using namespace ZOOM_SDK_NAMESPACE;
 
@@ -68,6 +77,7 @@ class MeetingEventHandler : public IMeetingServiceEvent {
   }
 };
 
+#if ZOOMSDK_HAS_RAW_AUDIO
 class AudioRawDelegate : public IZoomSDKAudioRawDataDelegate {
  public:
   explicit AudioRawDelegate(const std::string &out_dir) : out_dir_(out_dir) {}
@@ -136,6 +146,7 @@ class AudioRawDelegate : public IZoomSDKAudioRawDataDelegate {
   bool first_packet_logged_ = false;
   std::string out_dir_;
 };
+#endif
 
 int main(int argc, char **argv) {
   Args args;
@@ -188,6 +199,7 @@ int main(int argc, char **argv) {
   SDKError join_ret = meeting_service->Join(join_param);
   std::cout << "[recorder] join code=" << static_cast<int>(join_ret) << std::endl;
 
+#if ZOOMSDK_HAS_RAW_AUDIO
   IZoomSDKAudioRawDataHelper *audio_helper = GetAudioRawdataHelper();
   if (!audio_helper) {
     std::cerr << "[recorder] subscribe_audio FAIL helper_null" << std::endl;
@@ -196,6 +208,9 @@ int main(int argc, char **argv) {
     SDKError sub_ret = audio_helper->subscribe(&audio_delegate);
     std::cout << "[recorder] subscribe_audio code=" << static_cast<int>(sub_ret) << std::endl;
   }
+#else
+  std::cout << "[recorder] subscribe_audio SKIPPED raw_audio_headers_missing" << std::endl;
+#endif
 
   std::string mkdir_cmd = "mkdir -p " + args.out_dir + "/users " + args.out_dir + "/mixed";
   std::ignore = std::system(mkdir_cmd.c_str());
@@ -203,9 +218,11 @@ int main(int argc, char **argv) {
 
   std::this_thread::sleep_for(std::chrono::seconds(5));
 
+#if ZOOMSDK_HAS_RAW_AUDIO
   if (audio_helper) {
     audio_helper->unSubscribe();
   }
+#endif
 
   CleanUPSDK();
   std::cout << "[recorder] meeting_ended" << std::endl;

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from merge_audio import cleanup_expired_records, merge_meeting_audio
-from sdk_placeholder import start_zoom_meeting_record
+from sdk_placeholder import capture_audio_placeholder, start_zoom_meeting_record
 
 
 class JoinRequest(BaseModel):
@@ -30,6 +30,7 @@ logger = logging.getLogger("zoom-bot")
 
 @app.post("/join", response_model=JoinResponse)
 def join_meeting(payload: JoinRequest) -> JoinResponse:
+    logger.info("START join_meeting")
     record_dir = Path(os.environ.get("RECORD_DIR", "/data/records"))
     temp_record_dir = Path(os.environ.get("TEMP_RECORD_DIR", "/data/records_temp"))
     retention_days = int(os.environ.get("RECORD_RETENTION_DAYS", "5"))
@@ -40,11 +41,17 @@ def join_meeting(payload: JoinRequest) -> JoinResponse:
         passcode=payload.passcode,
         record_dir=temp_record_dir,
     )
+    logger.info("OK join_meeting (meeting_id=%s).", meeting_id)
     meeting_path = temp_record_dir / meeting_id
+    logger.info("START capture_audio")
+    capture_audio_placeholder(meeting_id, temp_record_dir)
+    logger.info("START merge_audio")
     merged_file = merge_meeting_audio(meeting_path, record_dir, meeting_started_at)
     if merged_file is None:
-        logger.warning(
-            "No valid WAV files found to merge. SDK integration is required to capture audio."
-        )
+        logger.warning("FAIL merge_audio: no valid WAV files found.")
+    else:
+        logger.info("OK merge_audio: %s", merged_file)
     cleanup_expired_records(record_dir, retention_days)
+    logger.info("OK cleanup_expired_records")
+    logger.info("DONE join_meeting")
     return JoinResponse(status="queued", meeting_id=meeting_id)

@@ -55,6 +55,29 @@ const char *SDKErrorToString(SDKError code) {
   }
 }
 
+const char *MeetingFailCodeToString(int code) {
+  switch (code) {
+    case MEETING_SUCCESS:
+      return "MEETING_SUCCESS";
+    case MEETING_FAIL_CONNECTION_ERR:
+      return "MEETING_FAIL_CONNECTION_ERR";
+    case MEETING_FAIL_PASSWORD_ERR:
+      return "MEETING_FAIL_PASSWORD_ERR";
+    case MEETING_FAIL_ENFORCE_LOGIN:
+      return "MEETING_FAIL_ENFORCE_LOGIN";
+    case MEETING_FAIL_HOST_DISALLOW_OUTSIDE_USER_JOIN:
+      return "MEETING_FAIL_HOST_DISALLOW_OUTSIDE_USER_JOIN";
+    case MEETING_FAIL_UNABLE_TO_JOIN_EXTERNAL_MEETING:
+      return "MEETING_FAIL_UNABLE_TO_JOIN_EXTERNAL_MEETING";
+    case MEETING_FAIL_BLOCKED_BY_ACCOUNT_ADMIN:
+      return "MEETING_FAIL_BLOCKED_BY_ACCOUNT_ADMIN";
+    case MEETING_FAIL_NEED_SIGN_IN_FOR_PRIVATE_MEETING:
+      return "MEETING_FAIL_NEED_SIGN_IN_FOR_PRIVATE_MEETING";
+    default:
+      return "MEETING_FAIL_(other/unknown)";
+  }
+}
+
 void LogSdkError(const std::string &label, SDKError code) {
   std::cout << label << " code=" << static_cast<int>(code)
             << " name=" << SDKErrorToString(code) << std::endl;
@@ -162,26 +185,14 @@ class MeetingEventHandler : public IMeetingServiceEvent {
     last_status.store(static_cast<int>(status));
     last_result.store(iResult);
     std::cout << "[recorder] meeting_status status=" << static_cast<int>(status)
-              << " result=" << iResult << std::endl;
-  }
-
-  void onMeetingStatisticsWarningNotification(StatisticsWarningType) override {}
-  void onMeetingParameterNotification(const MeetingParameter *) override {}
-  void onSuspendParticipantsActivities() override {}
-  void onAICompanionActiveChangeNotice(bool) override {}
-  void onMeetingTopicChanged(const zchar_t *) override {}
-  void onMeetingFullToWatchLiveStream(const zchar_t *) override {}
-  void onUserNetworkStatusChanged(MeetingComponentType, ConnectionQuality,
-                                  unsigned int, bool) override {}
-
-  void onMeetingFail(MeetingFail fail, int iResult) {
-    std::cerr << "[recorder] meeting_fail fail=" << static_cast<int>(fail)
-              << " result=" << iResult << std::endl;
-  }
-
-  void onMeetingError(MeetingError error, int iResult) {
-    std::cerr << "[recorder] meeting_error error=" << static_cast<int>(error)
-              << " result=" << iResult << std::endl;
+              << " result=" << iResult;
+    if (status == MEETING_STATUS_FAILED || status == MEETING_STATUS_ENDED) {
+      std::cout << " fail_name=" << MeetingFailCodeToString(iResult);
+      if (iResult == MEETING_FAIL_UNABLE_TO_JOIN_EXTERNAL_MEETING) {
+        std::cout << " hint=publish_meeting_sdk_app_required";
+      }
+    }
+    std::cout << std::endl;
   }
 
   void onMeetingNeedPassword(bool bNeedPassword, const zchar_t *psMeetingPassword) {
@@ -194,6 +205,15 @@ class MeetingEventHandler : public IMeetingServiceEvent {
     std::cout << "[recorder] join_result status=" << static_cast<int>(status)
               << " result=" << iResult << std::endl;
   }
+
+  void onMeetingStatisticsWarningNotification(StatisticsWarningType) override {}
+  void onMeetingParameterNotification(const MeetingParameter *) override {}
+  void onSuspendParticipantsActivities() override {}
+  void onAICompanionActiveChangeNotice(bool) override {}
+  void onMeetingTopicChanged(const zchar_t *) override {}
+  void onMeetingFullToWatchLiveStream(const zchar_t *) override {}
+  void onUserNetworkStatusChanged(MeetingComponentType, ConnectionQuality,
+                                  unsigned int, bool) override {}
 };
 
 class AuthEventHandler : public IAuthServiceEvent {

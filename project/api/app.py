@@ -63,12 +63,12 @@ def ui():
     <p>Подключение Meet.Ai к Zoom встрече.</p>
     <p><a href="/docs">Документация /docs</a> • <a href="/health">Health</a></p>
     <label for="meeting_url">Meeting URL (обязательный)</label>
-    <input id="meeting_url" type="text" placeholder="https://zoom.us/j/123456789?pwd=abc" />
+    <input id="meeting_url" type="text" placeholder="https://zoom.us/j/123456789" />
     <label for="passcode">Passcode (опционально)</label>
     <input id="passcode" type="text" placeholder="Например: 123456" />
     <p>
       Passcode — это код доступа (обычно 6–10 символов), а не значение
-      <code>pwd=</code> из ссылки.
+      <code>pwd=</code> из ссылки. Если не указать passcode, вход может не пройти.
     </p>
     <button id="submit">Подключить Meet.Ai</button>
     <h2>Результат</h2>
@@ -127,10 +127,16 @@ SDK_SECRET = os.getenv("ZOOM_MEETING_SDK_SECRET", "")
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
-def _sanitize_passcode(passcode: Optional[str]) -> Optional[str]:
-    if not passcode:
+def parse_passcode(explicit_passcode: Optional[str]) -> Optional[str]:
+    """
+    IMPORTANT:
+    Zoom URL query param `pwd=` is NOT the meeting passcode.
+    Meeting SDK JoinParam.psw expects the human-readable passcode (usually 6-10 chars),
+    which must be supplied explicitly by the user.
+    """
+    if not explicit_passcode:
         return None
-    trimmed = passcode.strip()
+    trimmed = explicit_passcode.strip()
     if not trimmed:
         return None
     if "." in trimmed or len(trimmed) > 16:
@@ -203,7 +209,7 @@ async def join_meeting(payload: JoinRequest):
     meeting_id = parsed["meeting_id"]
     pwd_token = parsed["pwd_token"]
 
-    passcode = _sanitize_passcode(payload.passcode)
+    passcode = parse_passcode(payload.passcode)
     try:
         signature = generate_signature(meeting_id)
     except ValueError as exc:

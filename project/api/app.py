@@ -70,6 +70,10 @@ def ui():
       Passcode — это код доступа (обычно 6–10 символов), а не значение
       <code>pwd=</code> из ссылки. Если не указать passcode, вход может не пройти.
     </p>
+    <p>
+      Чеклист: если после входа видите <code>status=ENDED result=63</code>,
+      проверьте auth-only режим, waiting room, требования регистрации и E2EE.
+    </p>
     <button id="submit">Подключить Meet.Ai</button>
     <h2>Результат</h2>
     <pre id="result">Ожидание запроса...</pre>
@@ -226,6 +230,7 @@ async def join_meeting(payload: JoinRequest):
         "passcode": passcode,
         "pwd_token": pwd_token,
         "meeting_url": payload.meeting_url,
+        "meeting_url_raw": payload.meeting_url,
         "display_name": BOT_DISPLAY_NAME,
         "signature": signature,
     }

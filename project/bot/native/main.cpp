@@ -173,6 +173,27 @@ class MeetingEventHandler : public IMeetingServiceEvent {
   void onMeetingFullToWatchLiveStream(const zchar_t *) override {}
   void onUserNetworkStatusChanged(MeetingComponentType, ConnectionQuality,
                                   unsigned int, bool) override {}
+
+  void onMeetingFail(MeetingFail fail, int iResult) {
+    std::cerr << "[recorder] meeting_fail fail=" << static_cast<int>(fail)
+              << " result=" << iResult << std::endl;
+  }
+
+  void onMeetingError(MeetingError error, int iResult) {
+    std::cerr << "[recorder] meeting_error error=" << static_cast<int>(error)
+              << " result=" << iResult << std::endl;
+  }
+
+  void onMeetingNeedPassword(bool bNeedPassword, const zchar_t *psMeetingPassword) {
+    std::cout << "[recorder] meeting_need_password need=" << bNeedPassword
+              << " pwd_present=" << (psMeetingPassword && *psMeetingPassword ? 1 : 0)
+              << std::endl;
+  }
+
+  void onJoinMeetingResult(MeetingStatus status, int iResult) {
+    std::cout << "[recorder] join_result status=" << static_cast<int>(status)
+              << " result=" << iResult << std::endl;
+  }
 };
 
 class AuthEventHandler : public IAuthServiceEvent {
@@ -335,7 +356,8 @@ int main(int argc, char **argv) {
 
   auto auth_start = std::chrono::steady_clock::now();
   while (!auth_done.load()) {
-    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    app.processEvents(QEventLoop::AllEvents, 50);
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     auto elapsed = std::chrono::steady_clock::now() - auth_start;
     if (std::chrono::duration_cast<std::chrono::seconds>(elapsed).count() >= 60) {
       std::cerr << "[recorder] auth timeout" << std::endl;
@@ -410,7 +432,7 @@ int main(int argc, char **argv) {
   auto last_log = meeting_start;
   bool in_meeting = false;
   while (true) {
-    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    app.processEvents(QEventLoop::AllEvents, 50);
 
     int status_value = meeting_events->last_status.load();
     int result_value = meeting_events->last_result.load();
@@ -449,7 +471,7 @@ int main(int argc, char **argv) {
       last_log = std::chrono::steady_clock::now();
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 
 #if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)

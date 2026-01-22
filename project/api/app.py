@@ -127,7 +127,7 @@ SDK_SECRET = os.getenv("ZOOM_MEETING_SDK_SECRET", "")
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
-def parse_passcode(explicit_passcode: Optional[str]) -> Optional[str]:
+def parse_passcode(meeting_url: str, explicit_passcode: Optional[str]) -> Optional[str]:
     """
     IMPORTANT:
     Zoom URL query param `pwd=` is NOT the meeting passcode.
@@ -138,9 +138,6 @@ def parse_passcode(explicit_passcode: Optional[str]) -> Optional[str]:
         return None
     trimmed = explicit_passcode.strip()
     if not trimmed:
-        return None
-    if "." in trimmed or len(trimmed) > 16:
-        logger.warning("passcode_rejected value=%s", trimmed)
         return None
     return trimmed
 
@@ -209,7 +206,7 @@ async def join_meeting(payload: JoinRequest):
     meeting_id = parsed["meeting_id"]
     pwd_token = parsed["pwd_token"]
 
-    passcode = parse_passcode(payload.passcode)
+    passcode = parse_passcode(payload.meeting_url, payload.passcode)
     try:
         signature = generate_signature(meeting_id)
     except ValueError as exc:

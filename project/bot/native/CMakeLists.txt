@@ -15,7 +15,13 @@ set(ZOOM_SDK_DIR "/app/zoom_sdk")
 set(ZOOM_SDK_INC "${ZOOM_SDK_DIR}/include")
 set(ZOOM_SDK_LIB "${ZOOM_SDK_DIR}/lib")
 
-target_include_directories(zoom_bot_recorder PRIVATE "${ZOOM_SDK_INC}")
+target_include_directories(zoom_bot_recorder PRIVATE
+  "${ZOOM_SDK_INC}"
+  "/usr/include/x86_64-linux-gnu/qt5"
+  "/usr/include/x86_64-linux-gnu/qt5/QtCore"
+  "/usr/include/x86_64-linux-gnu/qt5/QtGui"
+  "/usr/include/x86_64-linux-gnu/qt5/QtWidgets"
+)
 target_link_directories(zoom_bot_recorder PRIVATE "${ZOOM_SDK_LIB}")
 
 # IMPORTANT:

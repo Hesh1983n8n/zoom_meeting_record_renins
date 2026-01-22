@@ -12,25 +12,30 @@ if(ENABLE_RAW_AUDIO)
 endif()
 
 set(ZOOM_SDK_DIR "/app/zoom_sdk")
-set(ZOOM_SDK_LIB "/app/zoom_sdk/lib")
-target_include_directories(zoom_bot_recorder PRIVATE "/app/zoom_sdk/include")
-link_directories("${ZOOM_SDK_LIB}")
+set(ZOOM_SDK_INC "${ZOOM_SDK_DIR}/include")
+set(ZOOM_SDK_LIB "${ZOOM_SDK_DIR}/lib")
 
-find_package(Qt5 REQUIRED COMPONENTS Core)
+target_include_directories(zoom_bot_recorder PRIVATE "${ZOOM_SDK_INC}")
+target_link_directories(zoom_bot_recorder PRIVATE "${ZOOM_SDK_LIB}")
 
-file(GLOB_RECURSE ZOOMSDK_LIBS
-  "${ZOOM_SDK_DIR}/*.so"
-  "${ZOOM_SDK_DIR}/*.a"
-)
-if(NOT ZOOMSDK_LIBS)
-  message(FATAL_ERROR "Zoom SDK libraries (.so/.a) not found under ${ZOOM_SDK_DIR}")
-endif()
+# IMPORTANT:
+# Do NOT use system Qt via find_package(Qt5). Zoom SDK ships its own Qt in ${ZOOM_SDK_LIB}.
+# Link explicitly against SDK-provided libraries.
 
-message(STATUS "Found Zoom SDK libs: ${ZOOMSDK_LIBS}")
-
+# Link order matters: meetingsdk first, then its dependencies.
 target_link_libraries(zoom_bot_recorder PRIVATE
-  ${ZOOMSDK_LIBS}
-  Qt5::Core
+  meetingsdk
+
+  # Zoom-bundled Qt (must come from /app/zoom_sdk/lib)
+  Qt5Core
+  Qt5Network
+  Qt5DBus
+  Qt5Gui
+  Qt5Widgets
+  Qt5XcbQpa
+  Qt5X11Extras
+
+  # System libs
   pthread
   dl
 )

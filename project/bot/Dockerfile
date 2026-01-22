@@ -36,7 +36,13 @@ RUN set -eux; \
   cd /app/zoom_sdk/lib; \
   if [ -f libmeetingsdk.so ] && [ ! -e libmeetingsdk.so.1 ]; then \
     ln -s libmeetingsdk.so libmeetingsdk.so.1; \
-  fi
+  fi; \
+  for f in libQt5Core.so.5 libQt5Network.so.5 libQt5DBus.so.5 libQt5Gui.so.5 libQt5Widgets.so.5 libQt5XcbQpa.so.5 libQt5X11Extras.so.5; do \
+    base="${f%.5}"; \
+    if [ -e "$f" ] && [ ! -e "$base" ]; then \
+      ln -s "$f" "$base"; \
+    fi; \
+  done
 
 RUN echo "=== LIST /app/zoom_sdk ===" \
     && ls -lah /app/zoom_sdk || true \

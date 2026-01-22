@@ -55,11 +55,6 @@ void LogSdkError(const std::string &label, SDKError code) {
             << " name=" << SDKErrorToString(code) << std::endl;
 }
 
-std::string GetEnvVar(const char *key) {
-  const char *value = std::getenv(key);
-  return value ? value : "";
-}
-
 struct Args {
   std::string meeting_id;
   std::string passcode;
@@ -124,18 +119,28 @@ class MeetingEventHandler : public IMeetingServiceEvent {
 
 class AuthEventHandler : public IAuthServiceEvent {
  public:
-  explicit AuthEventHandler(std::atomic<bool> &authed)
-      : authed_(authed) {}
+  AuthEventHandler(std::atomic<bool> &authed, std::atomic<int> &auth_ret)
+      : authed_(authed), auth_ret_(auth_ret) {}
 
-  void onAuthenticationReturn(SDKError code) override {
-    LogSdkError("[recorder] auth return", code);
-    if (code == SDKERR_SUCCESS) {
+  void onAuthenticationReturn(AuthResult ret) override {
+    std::cout << "[recorder] auth_return ret=" << static_cast<int>(ret)
+              << std::endl;
+    if (ret == AUTHRET_SUCCESS) {
       authed_.store(true);
+    } else {
+      auth_ret_.store(static_cast<int>(ret));
     }
   }
 
+  void onLoginReturnWithReason(LOGINSTATUS, IAccountInfo *,
+                               LoginFailReason) override {}
+  void onLogout() override {}
+  void onZoomIdentityExpired() override {}
+  void onZoomAuthIdentityExpired() override {}
+
  private:
   std::atomic<bool> &authed_;
+  std::atomic<int> &auth_ret_;
 };
 
 #if ZOOMSDK_HAS_RAW_AUDIO
@@ -230,36 +235,35 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  std::string sdk_key = GetEnvVar("ZOOM_MEETING_SDK_KEY");
-  if (sdk_key.empty()) {
-    std::cerr << "[recorder] auth missing_sdk_key_env ZOOM_MEETING_SDK_KEY"
-              << std::endl;
-    return 3;
-  }
-
   IAuthService *auth_service = nullptr;
   SDKError auth_service_ret = CreateAuthService(&auth_service);
   LogSdkError("[recorder] create_auth_service", auth_service_ret);
   if (auth_service_ret != SDKERR_SUCCESS || !auth_service) {
-    return 4;
+    return 3;
   }
 
   std::atomic<bool> authed{false};
-  AuthEventHandler auth_events(authed);
+  std::atomic<int> auth_ret_code{-1};
+  AuthEventHandler auth_events(authed, auth_ret_code);
   auth_service->SetEvent(&auth_events);
 
-  AuthParam auth_param;
-  auth_param.sdkKey = sdk_key.c_str();
-  auth_param.jwtToken = args.signature.c_str();
+  AuthContext auth_ctx;
+  auth_ctx.jwt_token = args.signature.c_str();
 
-  std::cout << "[recorder] auth start" << std::endl;
-  SDKError auth_ret = auth_service->SDKAuth(auth_param);
-  LogSdkError("[recorder] auth", auth_ret);
+  std::cout << "[recorder] auth_start" << std::endl;
+  SDKError auth_ret = auth_service->SDKAuth(auth_ctx);
+  std::cout << "[recorder] auth_call rc=" << static_cast<int>(auth_ret)
+            << std::endl;
   if (auth_ret != SDKERR_SUCCESS) {
-    return 5;
+    return 4;
   }
 
   for (int i = 0; i < 100 && !authed.load(); ++i) {
+    if (auth_ret_code.load() != -1) {
+      std::cerr << "[recorder] auth failed ret=" << auth_ret_code.load()
+                << std::endl;
+      return 5;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
   if (!authed.load()) {
@@ -286,7 +290,7 @@ int main(int argc, char **argv) {
   join_without_login.userName = args.display_name.c_str();
   join_without_login.userZAK = "";
 
-  std::cout << "[recorder] join start" << std::endl;
+  std::cout << "[recorder] join_start" << std::endl;
   SDKError join_ret = meeting_service->Join(join_param);
   LogSdkError("[recorder] join", join_ret);
 

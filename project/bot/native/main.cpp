@@ -14,6 +14,8 @@
 #include "meeting_service_interface.h"
 #include "zoom_sdk.h"
 #include "zoom_sdk_raw_data_def.h"
+#include "rawdata/rawdata_audio_helper_interface.h"
+#include "rawdata/zoom_rawdata_api.h"
 
 #if __has_include("rawdata_audio_helper_interface.h")
 #include "rawdata_audio_helper_interface.h"
@@ -237,7 +239,7 @@ int main(int argc, char **argv) {
   LogSdkError("[recorder] join", join_ret);
 
 #if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
-  IZoomSDKAudioRawDataHelper *audio_helper = nullptr;
+  IZoomSDKAudioRawDataHelper *audio_helper = GetAudioRawdataHelper();
 #endif
 
 #if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)

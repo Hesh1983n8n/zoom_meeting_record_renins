@@ -224,6 +224,11 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  std::string home_dir = "/tmp/meetai_home";
+  std::string clean_cmd = "rm -rf " + home_dir + " && mkdir -p " + home_dir;
+  std::ignore = std::system(clean_cmd.c_str());
+  setenv("HOME", home_dir.c_str(), 1);
+
   const char *ld_path = std::getenv("LD_LIBRARY_PATH");
   std::cout << "[recorder] LD_LIBRARY_PATH=" << (ld_path ? ld_path : "") << std::endl;
 

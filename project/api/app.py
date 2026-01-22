@@ -142,12 +142,12 @@ def parse_passcode(meeting_url: str, explicit_passcode: Optional[str]) -> Option
     return query.get("pwd", [None])[0]
 
 
-def _build_sdk_auth_payload(timestamp: int, exp: int) -> dict:
+def _build_sdk_auth_payload(now: int) -> dict:
     return {
         "appKey": SDK_KEY,
-        "iat": timestamp,
-        "exp": exp,
-        "tokenExp": exp,
+        "iat": now - 30,
+        "exp": now + 60 * 60,
+        "tokenExp": now + 60 * 60,
     }
 
 
@@ -176,7 +176,7 @@ def _log_payload_times(payload: dict) -> None:
     if iat is None or exp is None or token_exp is None:
         logger.error("auth rc=15 name=SDKERR_UNAUTHENTICATION reason=missing_fields")
         raise ValueError("JWT payload missing required time fields")
-    if iat > now or exp <= now or token_exp <= now:
+    if exp <= now or token_exp <= now:
         logger.error("auth rc=15 name=SDKERR_UNAUTHENTICATION reason=time_invalid")
         raise ValueError("JWT time validation failed")
 
@@ -184,9 +184,8 @@ def _log_payload_times(payload: dict) -> None:
 def generate_signature(meeting_id: str) -> str:
     if not SDK_KEY or not SDK_SECRET:
         raise ValueError("Missing ZOOM_MEETING_SDK_KEY or ZOOM_MEETING_SDK_SECRET")
-    timestamp = int(time.time())
-    exp = timestamp + 300
-    payload = _build_sdk_auth_payload(timestamp, exp)
+    now = int(time.time())
+    payload = _build_sdk_auth_payload(now)
 
     token = jwt.encode(payload, SDK_SECRET, algorithm="HS256")
     decoded_payload = _decode_jwt_payload(token)
@@ -206,7 +205,7 @@ async def join_meeting(payload: JoinRequest):
     try:
         signature = generate_signature(meeting_id)
     except ValueError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     job = {
         "meeting_id": meeting_id,

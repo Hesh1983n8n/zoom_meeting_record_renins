@@ -57,18 +57,20 @@ Web-сервис передает данные в `bot`-сервис по вну
 
 ## Директории аудио
 
-Все файлы сохраняются в `./data/recordings`:
+Все файлы сохраняются в `E:\Docker_Prod\ReninsMeet`:
 
 ```
-data/recordings/<meeting_id>/
+records_temp/<meeting_id>/
   participant_<user_id>_<name>.wav
-  mix.wav
+records/
+  YYYYMMDD_HHMMSS.wav
 ```
 
 ## Склейка аудио
 
 Склейка выполняется скриптом `bot/merge_audio.py`, который вызывает `ffmpeg` с фильтром `amix`.
-Скрипт ожидает набор WAV-файлов и формирует `mix.wav`.
+Скрипт ожидает набор WAV-файлов из `records_temp`, формирует итоговый файл в `records`
+и удаляет временную папку встречи после склейки. Итоговый файл именуется по дате и времени встречи.
 
 ## Что нужно реализовать в SDK-части
 
@@ -84,5 +86,6 @@ data/recordings/<meeting_id>/
 - `ZOOM_SDK_KEY` – ключ SDK
 - `ZOOM_SDK_SECRET` – секрет SDK
 - `BOT_DISPLAY_NAME` – имя бота в встрече (по умолчанию `Meet.Ai`)
-- `RECORD_DIR` – каталог для записи аудио
-
+- `RECORD_DIR` – каталог для итоговых файлов (по умолчанию `/data/records`)
+- `TEMP_RECORD_DIR` – каталог для временных файлов (по умолчанию `/data/records_temp`)
+- `RECORD_RETENTION_DAYS` – срок хранения итоговых файлов (по умолчанию 5 дней)

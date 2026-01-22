@@ -10,7 +10,7 @@ services:
     depends_on:
       - bot
     volumes:
-      - ./data:/data
+      - E:\Docker_Prod\ReninsMeet:/data
 
   bot:
     build: ./bot
@@ -18,6 +18,8 @@ services:
       - ZOOM_SDK_KEY=${ZOOM_SDK_KEY}
       - ZOOM_SDK_SECRET=${ZOOM_SDK_SECRET}
       - BOT_DISPLAY_NAME=${BOT_DISPLAY_NAME:-Meet.Ai}
-      - RECORD_DIR=/data/recordings
+      - RECORD_DIR=/data/records
+      - TEMP_RECORD_DIR=/data/records_temp
+      - RECORD_RETENTION_DAYS=5
     volumes:
-      - ./data:/data
+      - E:\Docker_Prod\ReninsMeet:/data

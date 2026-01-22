@@ -19,6 +19,15 @@ COPY tools/ /app/tools/
 COPY native/ /app/native/
 COPY zoom_sdk/ /app/zoom_sdk/
 
+RUN echo "=== LIST /app/zoom_sdk ===" \
+    && ls -lah /app/zoom_sdk || true \
+    && echo "=== LIST /app/zoom_sdk/include ===" \
+    && ls -lah /app/zoom_sdk/include || true \
+    && echo "=== LIST /app/zoom_sdk/lib ===" \
+    && ls -lah /app/zoom_sdk/lib || true \
+    && echo "=== FIND SDK FILES (h/so/a) ===" \
+    && find /app/zoom_sdk -maxdepth 4 -type f \( -name "*.h" -o -name "*.so" -o -name "*.a" \) | head -n 200
+
 RUN cmake -S /app/native -B /app/native/build \
     && cmake --build /app/native/build --config Release \
     && mkdir -p /app/bin \

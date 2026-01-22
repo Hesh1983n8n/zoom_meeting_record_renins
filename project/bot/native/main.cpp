@@ -27,21 +27,6 @@
 
 using namespace ZOOM_SDK_NAMESPACE;
 
-template <typename T>
-auto &GetJoinWithoutLogin(T &param) -> decltype(param.without_login) {
-  return param.without_login;
-}
-
-template <typename T>
-auto &GetJoinWithoutLogin(T &param) -> decltype(param.withoutlogin) {
-  return param.withoutlogin;
-}
-
-template <typename T>
-auto &GetJoinWithoutLogin(T &param) -> decltype(param.withoutLogin) {
-  return param.withoutLogin;
-}
-
 const char *SDKErrorToString(SDKError code) {
   switch (code) {
     case SDKERR_SUCCESS:
@@ -240,7 +225,7 @@ int main(int argc, char **argv) {
 
   JoinParam join_param;
   join_param.userType = SDK_UT_WITHOUT_LOGIN;
-  auto &join_without_login = GetJoinWithoutLogin(join_param.param);
+  auto &join_without_login = join_param.param.withoutlogin;
   join_without_login.meetingNumber = std::stoull(args.meeting_id);
   join_without_login.psw = args.passcode.c_str();
   join_without_login.userName = args.display_name.c_str();

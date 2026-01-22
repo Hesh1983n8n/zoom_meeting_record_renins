@@ -18,6 +18,21 @@ class JoinRequest(BaseModel):
 
 app = FastAPI()
 
+
+@app.get("/")
+async def root():
+    return {
+        "ok": True,
+        "service": "Zoom Bot API",
+        "endpoints": {"POST /join": "enqueue zoom meeting join job"},
+        "docs": "/docs",
+    }
+
+
+@app.get("/health")
+async def health():
+    return {"ok": True}
+
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 QUEUE_NAME = os.getenv("QUEUE_NAME", "zoom_jobs")
 BOT_DISPLAY_NAME = os.getenv("BOT_DISPLAY_NAME", "Meet.Ai")

@@ -26,12 +26,82 @@ async def root():
         "service": "Zoom Bot API",
         "endpoints": {"POST /join": "enqueue zoom meeting join job"},
         "docs": "/docs",
+        "ui": "/ui",
     }
 
 
 @app.get("/health")
 async def health():
     return {"ok": True}
+
+
+@app.get("/ui")
+async def ui():
+    return """
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zoom Bot API</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 40px; max-width: 720px; }
+      label { display: block; margin-top: 16px; font-weight: 600; }
+      input { width: 100%; padding: 8px; margin-top: 6px; }
+      button { margin-top: 16px; padding: 10px 16px; }
+      pre { background: #f4f4f4; padding: 12px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h1>Zoom Bot API</h1>
+    <p>Подключение Meet.Ai к Zoom встрече.</p>
+    <label for="meeting_url">Meeting URL (обязательный)</label>
+    <input id="meeting_url" type="text" placeholder="https://zoom.us/j/123456789?pwd=abc" />
+    <label for="passcode">Passcode (опционально)</label>
+    <input id="passcode" type="text" placeholder="optional" />
+    <button id="submit">Подключить Meet.Ai</button>
+    <h2>Результат</h2>
+    <pre id="result">Ожидание запроса...</pre>
+    <script>
+      const resultEl = document.getElementById("result");
+      document.getElementById("submit").addEventListener("click", async () => {
+        const meetingUrl = document.getElementById("meeting_url").value.trim();
+        const passcode = document.getElementById("passcode").value.trim();
+        if (!meetingUrl) {
+          resultEl.textContent = "Ошибка: meeting_url обязателен.";
+          return;
+        }
+        resultEl.textContent = "Отправка запроса...";
+        try {
+          const payload = { meeting_url: meetingUrl };
+          if (passcode) {
+            payload.passcode = passcode;
+          }
+          const response = await fetch("/join", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            resultEl.textContent = `Ошибка ${response.status}: ${JSON.stringify(data)}`;
+            return;
+          }
+          const output = {
+            job_id: data.job_id ?? null,
+            meeting_id: data.meeting_id ?? null,
+            ok: data.ok,
+            enqueued: data.enqueued,
+          };
+          resultEl.textContent = JSON.stringify(output, null, 2);
+        } catch (error) {
+          resultEl.textContent = `Ошибка запроса: ${error}`;
+        }
+      });
+    </script>
+  </body>
+</html>
+"""
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 QUEUE_NAME = os.getenv("QUEUE_NAME", "zoom_jobs")

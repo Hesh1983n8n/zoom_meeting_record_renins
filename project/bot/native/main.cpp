@@ -368,10 +368,16 @@ int main(int argc, char **argv) {
   ZOOMSDK::JoinParam4WithoutLogin &join_without_login =
       join_param.param.withoutloginuserJoin;
   join_without_login.meetingNumber = std::stoull(args.meeting_id);
-  join_without_login.psw = args.passcode.c_str();
+  if (!args.passcode.empty()) {
+    join_without_login.psw = args.passcode.c_str();
+  } else {
+    join_without_login.psw = "";
+  }
   join_without_login.userName = args.display_name.c_str();
   join_without_login.userZAK = "";
 
+  std::cout << "[recorder] join_debug passcode_len=" << args.passcode.size()
+            << std::endl;
   std::cout << "[recorder] join_start" << std::endl;
   SDKError join_ret = meeting_service->Join(join_param);
   LogSdkError("[recorder] join", join_ret);

@@ -23,6 +23,12 @@ COPY tools/ /app/tools/
 COPY native/ /app/native/
 COPY zoom_sdk/ /app/zoom_sdk/
 
+RUN set -eux; \
+  cd /app/zoom_sdk/lib; \
+  if [ -f libmeetingsdk.so ] && [ ! -e libmeetingsdk.so.1 ]; then \
+    ln -s libmeetingsdk.so libmeetingsdk.so.1; \
+  fi
+
 RUN echo "=== LIST /app/zoom_sdk ===" \
     && ls -lah /app/zoom_sdk || true \
     && echo "=== LIST /app/zoom_sdk/include ===" \

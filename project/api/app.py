@@ -2,13 +2,15 @@ import base64
 import json
 import logging
 import os
+import secrets
 import time
 from typing import Optional
 
 import jwt
 import redis
+import requests
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from zoom_url import parse_zoom_meeting_url
@@ -62,6 +64,7 @@ def ui():
     <h1>Zoom Bot API</h1>
     <p>Подключение Meet.Ai к Zoom встрече.</p>
     <p><a href="/docs">Документация /docs</a> • <a href="/health">Health</a></p>
+    <p><a href="/oauth/start">Подключить Zoom OAuth</a></p>
     <label for="meeting_url">Meeting URL (обязательный)</label>
     <input id="meeting_url" type="text" placeholder="https://zoom.us/j/123456789" />
     <label for="passcode">Passcode (опционально)</label>
@@ -128,6 +131,10 @@ QUEUE_NAME = os.getenv("QUEUE_NAME", "zoom_jobs")
 BOT_DISPLAY_NAME = os.getenv("BOT_DISPLAY_NAME", "Meet.Ai")
 SDK_KEY = os.getenv("ZOOM_MEETING_SDK_KEY", "")
 SDK_SECRET = os.getenv("ZOOM_MEETING_SDK_SECRET", "")
+OAUTH_CLIENT_ID = os.getenv("ZOOM_OAUTH_CLIENT_ID", "")
+OAUTH_CLIENT_SECRET = os.getenv("ZOOM_OAUTH_CLIENT_SECRET", "")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+OAUTH_REDIRECT_PATH = os.getenv("OAUTH_REDIRECT_PATH", "/oauth/callback")
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
@@ -144,6 +151,67 @@ def parse_passcode(meeting_url: str, explicit_passcode: Optional[str]) -> Option
     if not trimmed:
         return None
     return trimmed
+
+
+def _oauth_redirect_uri() -> str:
+    if not PUBLIC_BASE_URL:
+        raise HTTPException(status_code=500, detail="PUBLIC_BASE_URL is not configured")
+    base = PUBLIC_BASE_URL.rstrip("/")
+    path = OAUTH_REDIRECT_PATH if OAUTH_REDIRECT_PATH.startswith("/") else f"/{OAUTH_REDIRECT_PATH}"
+    return f"{base}{path}"
+
+
+@app.get("/oauth/start")
+async def oauth_start():
+    if not OAUTH_CLIENT_ID or not OAUTH_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Zoom OAuth client is not configured")
+    redirect_uri = _oauth_redirect_uri()
+    state = secrets.token_urlsafe(16)
+    redis_client.setex(f"zoom_oauth_state:{state}", 600, "1")
+    auth_url = (
+        "https://zoom.us/oauth/authorize"
+        f"?response_type=code&client_id={OAUTH_CLIENT_ID}"
+        f"&redirect_uri={redirect_uri}&state={state}"
+    )
+    return RedirectResponse(url=auth_url)
+
+
+@app.get("/oauth/callback")
+async def oauth_callback(code: Optional[str] = None, state: Optional[str] = None):
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing code")
+    if not state:
+        raise HTTPException(status_code=400, detail="Missing state")
+    state_key = f"zoom_oauth_state:{state}"
+    if not redis_client.get(state_key):
+        raise HTTPException(status_code=400, detail="Invalid state")
+    redis_client.delete(state_key)
+
+    redirect_uri = _oauth_redirect_uri()
+    auth_header = base64.b64encode(f"{OAUTH_CLIENT_ID}:{OAUTH_CLIENT_SECRET}".encode("utf-8")).decode(
+        "utf-8"
+    )
+    response = requests.post(
+        "https://zoom.us/oauth/token",
+        params={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+        },
+        headers={
+            "Authorization": f"Basic {auth_header}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        timeout=20,
+    )
+    if response.status_code != 200:
+        logger.error("oauth_token_error status=%s body=%s", response.status_code, response.text)
+        raise HTTPException(status_code=502, detail="Zoom OAuth token exchange failed")
+
+    token_payload = response.json()
+    token_payload["obtained_at"] = int(time.time())
+    redis_client.set("zoom_oauth_tokens", json.dumps(token_payload))
+    return {"ok": True, "stored": True, "token_type": token_payload.get("token_type")}
 
 
 def _build_sdk_auth_payload(now: int) -> dict:

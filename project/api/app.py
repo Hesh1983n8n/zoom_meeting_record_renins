@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 import jwt
 import redis
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 
@@ -35,8 +36,8 @@ async def health():
     return {"ok": True}
 
 
-@app.get("/ui")
-async def ui():
+@app.get("/ui", response_class=HTMLResponse)
+def ui():
     return """
 <!doctype html>
 <html lang="en">
@@ -55,6 +56,7 @@ async def ui():
   <body>
     <h1>Zoom Bot API</h1>
     <p>Подключение Meet.Ai к Zoom встрече.</p>
+    <p><a href="/docs">Документация /docs</a> • <a href="/health">Health</a></p>
     <label for="meeting_url">Meeting URL (обязательный)</label>
     <input id="meeting_url" type="text" placeholder="https://zoom.us/j/123456789?pwd=abc" />
     <label for="passcode">Passcode (опционально)</label>
@@ -102,6 +104,11 @@ async def ui():
   </body>
 </html>
 """
+
+
+@app.get("/ui/health")
+async def ui_health():
+    return {"ok": True}
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 QUEUE_NAME = os.getenv("QUEUE_NAME", "zoom_jobs")

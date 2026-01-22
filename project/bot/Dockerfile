@@ -33,6 +33,10 @@ RUN echo "=== RAW/AUDIO HEADERS ===" \
 
 RUN grep -R "IZoomSDKAudioRawDataHelper" -n /app/zoom_sdk/include | head -n 50 || true
 RUN grep -R "rawdata_audio_helper_interface" -n /app/zoom_sdk/include | head -n 50 || true
+RUN grep -R "tagJoinParam" -n /app/zoom_sdk/include/meeting_service_interface.h | head -n 50 || true
+RUN grep -R "JoinParam4WithoutLogin" -n /app/zoom_sdk/include/meeting_service_interface.h | head -n 50 || true
+RUN grep -R "GetAudio.*Raw" -n /app/zoom_sdk/include | head -n 50 || true
+RUN grep -R "AudioRawDataHelper" -n /app/zoom_sdk/include | head -n 50 || true
 
 RUN cmake -S /app/native -B /app/native/build \
     && cmake --build /app/native/build --config Release \

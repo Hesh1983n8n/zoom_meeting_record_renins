@@ -75,6 +75,15 @@ class MeetingEventHandler : public IMeetingServiceEvent {
     std::cout << "[recorder] meeting_status status=" << static_cast<int>(status)
               << " result=" << iResult << std::endl;
   }
+
+  void onMeetingStatisticsWarningNotification(StatisticsWarningType) override {}
+  void onMeetingParameterNotification(const MeetingParameter *) override {}
+  void onSuspendParticipantsActivities() override {}
+  void onAICompanionActiveChangeNotice(bool) override {}
+  void onMeetingTopicChanged(const zchar_t *) override {}
+  void onMeetingFullToWatchLiveStream(const zchar_t *) override {}
+  void onUserNetworkStatusChanged(MeetingComponentType, ConnectionQuality,
+                                  unsigned int, bool) override {}
 };
 
 #if ZOOMSDK_HAS_RAW_AUDIO
@@ -98,6 +107,9 @@ class AudioRawDelegate : public IZoomSDKAudioRawDataDelegate {
     WriteWavChunk(data, out_dir_ + "/users/" + std::to_string(userId) + "/chunks",
                   std::to_string(userId));
   }
+
+  void onShareAudioRawDataReceived(AudioRawData *, uint32_t) override {}
+  void onOneWayInterpreterAudioRawDataReceived(AudioRawData *, const zchar_t *) override {}
 
  private:
   void WriteWavChunk(AudioRawData *data, const std::string &dir, const std::string &prefix) {
@@ -168,7 +180,6 @@ int main(int argc, char **argv) {
 
   InitParam init_param;
   init_param.strWebDomain = "https://zoom.us";
-  init_param.enableLog = true;
   SDKError init_ret = InitSDK(init_param);
   std::cout << "[recorder] init_sdk code=" << static_cast<int>(init_ret) << std::endl;
   if (init_ret != SDKERR_SUCCESS) {
@@ -188,19 +199,19 @@ int main(int argc, char **argv) {
 
   JoinParam join_param;
   join_param.userType = SDK_UT_WITHOUT_LOGIN;
-  JoinParam4WithoutLogin &join_without_login = join_param.param.withoutlogin;
+  JoinParam4WithoutLogin &join_without_login = join_param.param.without_login;
   join_without_login.meetingNumber = std::stoull(args.meeting_id);
   join_without_login.psw = args.passcode.c_str();
   join_without_login.userName = args.display_name.c_str();
   join_without_login.userZAK = "";
-  join_without_login.appPriviledgeToken = args.signature.c_str();
+  join_without_login.app_privilege_token = args.signature.c_str();
 
   std::cout << "[recorder] join_meeting start" << std::endl;
   SDKError join_ret = meeting_service->Join(join_param);
   std::cout << "[recorder] join code=" << static_cast<int>(join_ret) << std::endl;
 
 #if ZOOMSDK_HAS_RAW_AUDIO
-  IZoomSDKAudioRawDataHelper *audio_helper = GetAudioRawdataHelper();
+  IZoomSDKAudioRawDataHelper *audio_helper = GetAudioRawDataHelper();
   if (!audio_helper) {
     std::cerr << "[recorder] subscribe_audio FAIL helper_null" << std::endl;
   } else {

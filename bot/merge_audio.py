@@ -16,8 +16,13 @@ def merge_meeting_audio(
     output_dir: Path,
     meeting_started_at: datetime,
 ) -> Path | None:
-    wav_files = sorted(meeting_path.glob("*.wav"))
+    wav_files = [
+        wav_file
+        for wav_file in sorted(meeting_path.glob("*.wav"))
+        if wav_file.stat().st_size > 0
+    ]
     if not wav_files:
+        _cleanup_temp_meeting(meeting_path)
         return None
 
     output_dir.mkdir(parents=True, exist_ok=True)

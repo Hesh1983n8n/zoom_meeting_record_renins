@@ -4,6 +4,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+import logging
+
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
@@ -23,6 +25,7 @@ class JoinResponse(BaseModel):
 
 
 app = FastAPI(title="Zoom Meeting Bot")
+logger = logging.getLogger("zoom-bot")
 
 
 @app.post("/join", response_model=JoinResponse)
@@ -38,6 +41,10 @@ def join_meeting(payload: JoinRequest) -> JoinResponse:
         record_dir=temp_record_dir,
     )
     meeting_path = temp_record_dir / meeting_id
-    merge_meeting_audio(meeting_path, record_dir, meeting_started_at)
+    merged_file = merge_meeting_audio(meeting_path, record_dir, meeting_started_at)
+    if merged_file is None:
+        logger.warning(
+            "No valid WAV files found to merge. SDK integration is required to capture audio."
+        )
     cleanup_expired_records(record_dir, retention_days)
     return JoinResponse(status="queued", meeting_id=meeting_id)

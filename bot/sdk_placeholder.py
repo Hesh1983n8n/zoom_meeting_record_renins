@@ -35,7 +35,4 @@ def start_zoom_meeting_record(
     resolved_passcode = passcode or parsed_passcode
     meeting_path = record_dir / meeting_id
     meeting_path.mkdir(parents=True, exist_ok=True)
-    dummy_file = meeting_path / "participant_000_placeholder.wav"
-    if not dummy_file.exists():
-        dummy_file.write_bytes(b"")
     return meeting_id, resolved_passcode

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -39,7 +39,7 @@ def root() -> HTMLResponse:
       </head>
       <body>
         <h1>Подключение Meet.Ai к Zoom</h1>
-        <form method="post" action="/join">
+        <form method="post" action="/join-form">
           <label>Ссылка на встречу Zoom
             <input type="text" name="meeting_url" placeholder="https://zoom.us/j/123..." required />
           </label>
@@ -67,3 +67,26 @@ async def join_meeting(payload: JoinRequest) -> JoinResponse:
     if response.status_code >= 400:
         raise HTTPException(status_code=502, detail=response.text)
     return JoinResponse(status="queued")
+
+
+@app.post("/join-form", response_class=HTMLResponse)
+async def join_meeting_form(
+    meeting_url: str = Form(...),
+    display_name: str = Form("Meet.Ai"),
+    passcode: str | None = Form(None),
+) -> HTMLResponse:
+    payload = JoinRequest(
+        meeting_url=meeting_url,
+        display_name=display_name,
+        passcode=passcode,
+    )
+    bot_http_url = os.environ.get("BOT_HTTP_URL", "http://bot:8080")
+    target = f"{bot_http_url.rstrip('/')}/join"
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(target, json=payload.model_dump())
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=response.text)
+    return HTMLResponse(
+        content="<p>Запрос отправлен. Бот подключается к встрече.</p>",
+        status_code=200,
+    )

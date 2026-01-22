@@ -23,6 +23,11 @@ def process_job(job: Dict[str, Any]) -> None:
 
     logging.info("join_meeting meeting_id=%s display_name=%s mode=%s", meeting_id, display_name, mode)
 
+    subprocess.run(
+        ["sh", "-c", "rm -rf /tmp/meetai_home && mkdir -p /tmp/meetai_home"],
+        check=False,
+    )
+
     cmd = [
         str(recorder_path),
         "--meeting_id",

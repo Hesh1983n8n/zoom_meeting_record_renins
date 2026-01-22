@@ -80,6 +80,7 @@ RUN ldd /app/zoom_sdk/lib/libmeetingsdk.so | tee /tmp/meetingsdk-ldd.txt
 RUN chmod +x /app/bin/merge_audio /app/bin/zoom_bot_recorder \
     && test -x /app/bin/zoom_bot_recorder
 
+ENV HOME=/tmp/meetai_home
 ENV LD_LIBRARY_PATH=/app/zoom_sdk/lib:${LD_LIBRARY_PATH}
 
 CMD ["python", "/app/worker.py"]

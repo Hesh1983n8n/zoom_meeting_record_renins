@@ -188,6 +188,8 @@ def generate_signature(meeting_id: str) -> str:
     payload = _build_sdk_auth_payload(now)
 
     token = jwt.encode(payload, SDK_SECRET, algorithm="HS256")
+    if isinstance(token, bytes):
+        token = token.decode("utf-8")
     decoded_payload = _decode_jwt_payload(token)
     logger.info("jwt_mode=sdk_auth payload=%s", decoded_payload)
     _log_payload_times(decoded_payload)
@@ -206,6 +208,15 @@ async def join_meeting(payload: JoinRequest):
         signature = generate_signature(meeting_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    decoded_payload = _decode_jwt_payload(signature)
+    now = int(time.time())
+    iat = decoded_payload.get("iat")
+    exp = decoded_payload.get("exp")
+    delta_exp = exp - now if isinstance(exp, int) else None
+    print("JWT_DEBUG now=", now, "iat=", iat, "exp=", exp, "delta_exp=", delta_exp)
+    if delta_exp is None or delta_exp <= 0:
+        raise HTTPException(status_code=400, detail="JWT exp is not valid")
 
     job = {
         "meeting_id": meeting_id,

@@ -1,6 +1,7 @@
 #include <chrono>
 #include <atomic>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -53,6 +54,54 @@ const char *SDKErrorToString(SDKError code) {
 void LogSdkError(const std::string &label, SDKError code) {
   std::cout << label << " code=" << static_cast<int>(code)
             << " name=" << SDKErrorToString(code) << std::endl;
+}
+
+std::string Base64UrlDecode(const std::string &input) {
+  std::string base64 = input;
+  for (char &c : base64) {
+    if (c == '-') {
+      c = '+';
+    } else if (c == '_') {
+      c = '/';
+    }
+  }
+  while (base64.size() % 4 != 0) {
+    base64.push_back('=');
+  }
+  static const std::string kChars =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::vector<unsigned char> bytes;
+  int val = 0;
+  int valb = -8;
+  for (unsigned char c : base64) {
+    if (c == '=') {
+      break;
+    }
+    size_t idx = kChars.find(c);
+    if (idx == std::string::npos) {
+      continue;
+    }
+    val = (val << 6) + static_cast<int>(idx);
+    valb += 6;
+    if (valb >= 0) {
+      bytes.push_back(static_cast<unsigned char>((val >> valb) & 0xFF));
+      valb -= 8;
+    }
+  }
+  return std::string(bytes.begin(), bytes.end());
+}
+
+std::string DecodeJwtPayload(const std::string &jwt_token) {
+  size_t first_dot = jwt_token.find('.');
+  if (first_dot == std::string::npos) {
+    return "";
+  }
+  size_t second_dot = jwt_token.find('.', first_dot + 1);
+  if (second_dot == std::string::npos) {
+    return "";
+  }
+  std::string payload = jwt_token.substr(first_dot + 1, second_dot - first_dot - 1);
+  return Base64UrlDecode(payload);
 }
 
 struct Args {
@@ -254,6 +303,12 @@ int main(int argc, char **argv) {
 
   AuthContext auth_ctx;
   auth_ctx.jwt_token = args.signature.c_str();
+
+  std::cout << "[recorder] auth_debug epoch=" << time(nullptr) << std::endl;
+  std::string decoded_payload = DecodeJwtPayload(args.signature);
+  if (!decoded_payload.empty()) {
+    std::cout << "[recorder] auth_debug payload=" << decoded_payload << std::endl;
+  }
 
   std::cout << "[recorder] auth_start" << std::endl;
   SDKError auth_ret = auth_service->SDKAuth(auth_ctx);

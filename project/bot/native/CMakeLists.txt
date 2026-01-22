@@ -16,6 +16,8 @@ set(ZOOM_SDK_LIB "/app/zoom_sdk/lib")
 target_include_directories(zoom_bot_recorder PRIVATE "/app/zoom_sdk/include")
 link_directories("${ZOOM_SDK_LIB}")
 
+find_package(Qt5 REQUIRED COMPONENTS Core)
+
 file(GLOB_RECURSE ZOOMSDK_LIBS
   "${ZOOM_SDK_DIR}/*.so"
   "${ZOOM_SDK_DIR}/*.a"
@@ -28,6 +30,7 @@ message(STATUS "Found Zoom SDK libs: ${ZOOMSDK_LIBS}")
 
 target_link_libraries(zoom_bot_recorder PRIVATE
   ${ZOOMSDK_LIBS}
+  Qt5::Core
   pthread
   dl
 )

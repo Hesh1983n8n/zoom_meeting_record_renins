@@ -5,9 +5,13 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <QCoreApplication>
+#include <QTimer>
 
 // Zoom Meeting SDK for Linux v6.7.2.7020 headers:
 // - meeting_service_interface.h
@@ -168,17 +172,17 @@ class MeetingEventHandler : public IMeetingServiceEvent {
 
 class AuthEventHandler : public IAuthServiceEvent {
  public:
-  AuthEventHandler(std::atomic<bool> &authed, std::atomic<int> &auth_ret)
-      : authed_(authed), auth_ret_(auth_ret) {}
+  AuthEventHandler(std::atomic<bool> &authed,
+                   std::atomic<bool> &auth_done,
+                   std::atomic<int> &auth_ret)
+      : authed_(authed), auth_done_(auth_done), auth_ret_(auth_ret) {}
 
   void onAuthenticationReturn(AuthResult ret) override {
     std::cout << "[recorder] auth_return ret=" << static_cast<int>(ret)
               << std::endl;
-    if (ret == AUTHRET_SUCCESS) {
-      authed_.store(true);
-    } else {
-      auth_ret_.store(static_cast<int>(ret));
-    }
+    auth_done_.store(true);
+    authed_.store(ret == AUTHRET_SUCCESS);
+    auth_ret_.store(static_cast<int>(ret));
   }
 
   void onLoginReturnWithReason(LOGINSTATUS, IAccountInfo *,
@@ -189,6 +193,7 @@ class AuthEventHandler : public IAuthServiceEvent {
 
  private:
   std::atomic<bool> &authed_;
+  std::atomic<bool> &auth_done_;
   std::atomic<int> &auth_ret_;
 };
 
@@ -267,6 +272,8 @@ class AudioRawDelegate : public IZoomSDKAudioRawDataDelegate {
 #endif
 
 int main(int argc, char **argv) {
+  QCoreApplication app(argc, argv);
+
   Args args;
   if (!ParseArgs(argc, argv, args)) {
     std::cerr << "[recorder] init_sdk FAIL missing_args" << std::endl;
@@ -297,9 +304,12 @@ int main(int argc, char **argv) {
   }
 
   std::atomic<bool> authed{false};
+  std::atomic<bool> auth_done{false};
   std::atomic<int> auth_ret_code{-1};
-  AuthEventHandler auth_events(authed, auth_ret_code);
+  AuthEventHandler auth_events(authed, auth_done, auth_ret_code);
   auth_service->SetEvent(&auth_events);
+  std::cout << "[recorder] set_auth_event_handler OK ptr=" << &auth_events
+            << std::endl;
 
   AuthContext auth_ctx;
   auth_ctx.jwt_token = args.signature.c_str();
@@ -318,70 +328,81 @@ int main(int argc, char **argv) {
     return 4;
   }
 
-  for (int i = 0; i < 100 && !authed.load(); ++i) {
-    if (auth_ret_code.load() != -1) {
-      std::cerr << "[recorder] auth failed ret=" << auth_ret_code.load()
-                << std::endl;
-      return 5;
+  QTimer auth_timer;
+  QObject::connect(&auth_timer, &QTimer::timeout, [&]() {
+    static int waited_seconds = 0;
+    waited_seconds += 1;
+    if (auth_done.load()) {
+      if (!authed.load()) {
+        std::cerr << "[recorder] auth failed ret=" << auth_ret_code.load()
+                  << std::endl;
+        app.quit();
+        return;
+      }
+      std::cout << "[recorder] auth ok -> continue to join" << std::endl;
+
+      static IMeetingService *meeting_service = nullptr;
+      SDKError meeting_ret = CreateMeetingService(&meeting_service);
+      LogSdkError("[recorder] create_meeting_service", meeting_ret);
+      if (meeting_ret != SDKERR_SUCCESS || !meeting_service) {
+        app.quit();
+        return;
+      }
+
+      MeetingEventHandler meeting_events;
+      meeting_service->SetEvent(&meeting_events);
+
+      JoinParam join_param;
+      join_param.userType = ZOOMSDK::SDK_UT_WITHOUT_LOGIN;
+      ZOOMSDK::JoinParam4WithoutLogin &join_without_login =
+          join_param.param.withoutloginuserJoin;
+      join_without_login.meetingNumber = std::stoull(args.meeting_id);
+      join_without_login.psw = args.passcode.c_str();
+      join_without_login.userName = args.display_name.c_str();
+      join_without_login.userZAK = "";
+
+      std::cout << "[recorder] join_start" << std::endl;
+      SDKError join_ret = meeting_service->Join(join_param);
+      LogSdkError("[recorder] join", join_ret);
+
+#if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
+      static ZOOMSDK::IZoomSDKAudioRawDataHelper *audio_helper =
+          ZOOMSDK::GetAudioRawdataHelper();
+      if (!audio_helper) {
+        std::cerr << "[recorder] subscribe_audio SKIPPED helper_unavailable" << std::endl;
+      } else {
+        static AudioRawDelegate audio_delegate(args.out_dir);
+        SDKError sub_ret = audio_helper->subscribe(&audio_delegate);
+        LogSdkError("[recorder] subscribe_audio", sub_ret);
+      }
+#endif
+
+      std::string mkdir_cmd =
+          "mkdir -p " + args.out_dir + "/users " + args.out_dir + "/mixed";
+      std::ignore = std::system(mkdir_cmd.c_str());
+      WriteMetadata(args.out_dir, args.meeting_id);
+
+      QTimer::singleShot(5000, [&]() {
+#if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
+        if (audio_helper) {
+          audio_helper->unSubscribe();
+        }
+#endif
+        CleanUPSDK();
+        std::cout << "[recorder] meeting_ended" << std::endl;
+        app.quit();
+      });
+
+      auth_timer.stop();
+      return;
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  }
-  if (!authed.load()) {
-    std::cerr << "[recorder] auth timeout" << std::endl;
-    return 6;
-  }
 
-  IMeetingService *meeting_service = nullptr;
-  SDKError meeting_ret = CreateMeetingService(&meeting_service);
-  LogSdkError("[recorder] create_meeting_service", meeting_ret);
-  if (meeting_ret != SDKERR_SUCCESS || !meeting_service) {
-    return 7;
-  }
+    if (waited_seconds >= 60) {
+      std::cerr << "[recorder] auth timeout" << std::endl;
+      app.quit();
+    }
+  });
+  auth_timer.start(1000);
 
-  MeetingEventHandler meeting_events;
-  meeting_service->SetEvent(&meeting_events);
-
-  JoinParam join_param;
-  join_param.userType = ZOOMSDK::SDK_UT_WITHOUT_LOGIN;
-  ZOOMSDK::JoinParam4WithoutLogin &join_without_login =
-      join_param.param.withoutloginuserJoin;
-  join_without_login.meetingNumber = std::stoull(args.meeting_id);
-  join_without_login.psw = args.passcode.c_str();
-  join_without_login.userName = args.display_name.c_str();
-  join_without_login.userZAK = "";
-
-  std::cout << "[recorder] join_start" << std::endl;
-  SDKError join_ret = meeting_service->Join(join_param);
-  LogSdkError("[recorder] join", join_ret);
-
-#if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
-  ZOOMSDK::IZoomSDKAudioRawDataHelper *audio_helper =
-      ZOOMSDK::GetAudioRawdataHelper();
-#endif
-
-#if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
-  if (!audio_helper) {
-    std::cerr << "[recorder] subscribe_audio SKIPPED helper_unavailable" << std::endl;
-  } else {
-    AudioRawDelegate audio_delegate(args.out_dir);
-    SDKError sub_ret = audio_helper->subscribe(&audio_delegate);
-    LogSdkError("[recorder] subscribe_audio", sub_ret);
-  }
-#endif
-
-  std::string mkdir_cmd = "mkdir -p " + args.out_dir + "/users " + args.out_dir + "/mixed";
-  std::ignore = std::system(mkdir_cmd.c_str());
-  WriteMetadata(args.out_dir, args.meeting_id);
-
-  std::this_thread::sleep_for(std::chrono::seconds(5));
-
-#if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
-  if (audio_helper) {
-    audio_helper->unSubscribe();
-  }
-#endif
-
-  CleanUPSDK();
-  std::cout << "[recorder] meeting_ended" << std::endl;
-  return 0;
+  return app.exec();
 }

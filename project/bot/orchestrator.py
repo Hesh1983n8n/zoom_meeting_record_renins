@@ -28,6 +28,16 @@ def process_job(job: Dict[str, Any]) -> None:
         check=False,
     )
 
+    env = os.environ.copy()
+    env["DISPLAY"] = env.get("DISPLAY", ":99")
+    env["HOME"] = "/tmp/meetai_home"
+
+    subprocess.Popen(
+        ["Xvfb", env["DISPLAY"], "-screen", "0", "1280x720x24"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
     cmd = [
         str(recorder_path),
         "--meeting_id",
@@ -46,7 +56,7 @@ def process_job(job: Dict[str, Any]) -> None:
         cmd.extend(["--passcode", passcode])
 
     logging.info("record_audio cmd=%s", json.dumps(cmd))
-    subprocess.run(cmd, check=False)
+    subprocess.run(cmd, check=False, env=env)
 
     merge_cmd = ["/app/bin/merge_audio", str(meeting_dir)]
     logging.info("merge_audio cmd=%s", json.dumps(merge_cmd))

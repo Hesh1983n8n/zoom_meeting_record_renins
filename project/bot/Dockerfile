@@ -9,6 +9,15 @@ RUN apt-get update \
         cmake \
         pkg-config \
         ca-certificates \
+        xvfb \
+        xauth \
+        dbus-x11 \
+        libx11-6 \
+        libx11-xcb1 \
+        libglib2.0-0 \
+        libnss3 \
+        libasound2 \
+        qtbase5-dev \
         libxcb1 \
         libxcb-image0 \
         libxcb-keysyms1 \

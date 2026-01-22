@@ -120,8 +120,6 @@ QUEUE_NAME = os.getenv("QUEUE_NAME", "zoom_jobs")
 BOT_DISPLAY_NAME = os.getenv("BOT_DISPLAY_NAME", "Meet.Ai")
 SDK_KEY = os.getenv("ZOOM_MEETING_SDK_KEY", "")
 SDK_SECRET = os.getenv("ZOOM_MEETING_SDK_SECRET", "")
-SIGNATURE_MODE = os.getenv("SIGNATURE_MODE", "sdk_auth").lower()
-
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
@@ -146,21 +144,9 @@ def parse_passcode(meeting_url: str, explicit_passcode: Optional[str]) -> Option
 
 def _build_sdk_auth_payload(timestamp: int, exp: int) -> dict:
     return {
-        "sdkKey": SDK_KEY,
-        "iat": timestamp,
-        "exp": exp,
-        "tokenExp": exp,
-    }
-
-
-def _build_meeting_sdk_payload(meeting_id: str, timestamp: int, exp: int) -> dict:
-    return {
-        "sdkKey": SDK_KEY,
-        "mn": meeting_id,
-        "role": 0,
-        "iat": timestamp,
-        "exp": exp,
         "appKey": SDK_KEY,
+        "iat": timestamp,
+        "exp": exp,
         "tokenExp": exp,
     }
 
@@ -200,16 +186,11 @@ def generate_signature(meeting_id: str) -> str:
         raise ValueError("Missing ZOOM_MEETING_SDK_KEY or ZOOM_MEETING_SDK_SECRET")
     timestamp = int(time.time())
     exp = timestamp + 300
-    if SIGNATURE_MODE == "sdk_auth":
-        payload = _build_sdk_auth_payload(timestamp, exp)
-    elif SIGNATURE_MODE == "meeting_sdk":
-        payload = _build_meeting_sdk_payload(meeting_id, timestamp, exp)
-    else:
-        raise ValueError(f"Unsupported SIGNATURE_MODE: {SIGNATURE_MODE}")
+    payload = _build_sdk_auth_payload(timestamp, exp)
 
     token = jwt.encode(payload, SDK_SECRET, algorithm="HS256")
     decoded_payload = _decode_jwt_payload(token)
-    logger.info("jwt_mode=%s payload=%s", SIGNATURE_MODE, decoded_payload)
+    logger.info("jwt_mode=sdk_auth payload=%s", decoded_payload)
     _log_payload_times(decoded_payload)
     return token
 

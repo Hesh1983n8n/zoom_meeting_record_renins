@@ -37,6 +37,17 @@ RUN grep -R "tagJoinParam" -n /app/zoom_sdk/include/meeting_service_interface.h 
 RUN grep -R "JoinParam4WithoutLogin" -n /app/zoom_sdk/include/meeting_service_interface.h | head -n 50 || true
 RUN grep -R "GetAudio.*Raw" -n /app/zoom_sdk/include | head -n 50 || true
 RUN grep -R "AudioRawDataHelper" -n /app/zoom_sdk/include | head -n 50 || true
+RUN set -eux; \
+  echo "=== JOIN PARAM UNION FIELDS (grep) ==="; \
+  grep -n "tagJoinParam" -n /app/zoom_sdk/include/meeting_service_interface.h | head -n 60 || true; \
+  echo "=== JoinParam4WithoutLogin occurrences ==="; \
+  grep -n "JoinParam4WithoutLogin" /app/zoom_sdk/include/meeting_service_interface.h | head -n 80 || true; \
+  echo "=== show tagJoinParam struct block (best effort) ==="; \
+  awk 'NR>=1 && NR<=1200 {print}' /app/zoom_sdk/include/meeting_service_interface.h | grep -n "tagJoinParam" -n | head -n 20 || true; \
+  echo "=== RAWDATA helper symbols ==="; \
+  grep -R "AudioRawDataHelper" -n /app/zoom_sdk/include | head -n 80 || true; \
+  grep -R "Get.*Raw.*Data.*Helper" -n /app/zoom_sdk/include | head -n 80 || true; \
+  grep -R "Create.*Raw.*Data" -n /app/zoom_sdk/include | head -n 80 || true;
 
 RUN cmake -S /app/native -B /app/native/build \
     && cmake --build /app/native/build --config Release \

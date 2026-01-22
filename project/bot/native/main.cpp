@@ -27,6 +27,21 @@
 
 using namespace ZOOM_SDK_NAMESPACE;
 
+template <typename T>
+auto &GetJoinWithoutLogin(T &param) -> decltype(param.without_login) {
+  return param.without_login;
+}
+
+template <typename T>
+auto &GetJoinWithoutLogin(T &param) -> decltype(param.withoutlogin) {
+  return param.withoutlogin;
+}
+
+template <typename T>
+auto &GetJoinWithoutLogin(T &param) -> decltype(param.withoutLogin) {
+  return param.withoutLogin;
+}
+
 const char *SDKErrorToString(SDKError code) {
   switch (code) {
     case SDKERR_SUCCESS:
@@ -225,7 +240,7 @@ int main(int argc, char **argv) {
 
   JoinParam join_param;
   join_param.userType = SDK_UT_WITHOUT_LOGIN;
-  JoinParam4WithoutLogin &join_without_login = join_param.param.without_login;
+  auto &join_without_login = GetJoinWithoutLogin(join_param.param);
   join_without_login.meetingNumber = std::stoull(args.meeting_id);
   join_without_login.psw = args.passcode.c_str();
   join_without_login.userName = args.display_name.c_str();
@@ -236,17 +251,20 @@ int main(int argc, char **argv) {
   SDKError join_ret = meeting_service->Join(join_param);
   LogSdkError("[recorder] join", join_ret);
 
-#if ZOOMSDK_HAS_RAW_AUDIO
-  IZoomSDKAudioRawDataHelper *audio_helper = GetAudioRawDataHelper();
+#if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
+  IZoomSDKAudioRawDataHelper *audio_helper = nullptr;
+#endif
+
+#if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
   if (!audio_helper) {
-    std::cerr << "[recorder] subscribe_audio FAIL helper_null" << std::endl;
+    std::cerr << "[recorder] subscribe_audio SKIPPED helper_unavailable" << std::endl;
   } else {
     AudioRawDelegate audio_delegate(args.out_dir);
     SDKError sub_ret = audio_helper->subscribe(&audio_delegate);
     LogSdkError("[recorder] subscribe_audio", sub_ret);
   }
 #else
-  std::cout << "[recorder] subscribe_audio SKIPPED raw_audio_headers_missing" << std::endl;
+  std::cout << "[recorder] subscribe_audio SKIPPED raw_audio_disabled" << std::endl;
 #endif
 
   std::string mkdir_cmd = "mkdir -p " + args.out_dir + "/users " + args.out_dir + "/mixed";
@@ -255,7 +273,7 @@ int main(int argc, char **argv) {
 
   std::this_thread::sleep_for(std::chrono::seconds(5));
 
-#if ZOOMSDK_HAS_RAW_AUDIO
+#if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
   if (audio_helper) {
     audio_helper->unSubscribe();
   }

@@ -2,6 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+RUN mkdir -p /app/bin
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
@@ -9,7 +11,9 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py merge_audio.py sdk_placeholder.py .
+COPY app.py orchestrator.py parsing.py .
+COPY tools/merge_audio.sh /app/bin/merge_audio
+RUN chmod +x /app/bin/merge_audio
 
 EXPOSE 8080
 

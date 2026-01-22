@@ -67,26 +67,44 @@ Web-сервис передает данные в `bot`-сервис по вну
 
 ## Директории аудио
 
-Все файлы сохраняются в `E:\Docker_Prod\ReninsMeet`:
+Все файлы сохраняются в `E:\Docker_Prod\ReninsMeet`, внутри создается структура:
 
 ```
-records_temp/<meeting_id>/
-  participant_<user_id>_<name>.wav
-records/
-  YYYYMMDD_HHMMSS.wav
+meetings/<meeting_id>/
+  metadata.json
+  users/<user_id>/
+    name.txt
+    chunks/
+      000001.wav
+      000002.wav
+    final.wav
+  mixed/
+    chunks/
+    final.wav
 ```
 
 ## Склейка аудио
 
-Склейка выполняется скриптом `bot/merge_audio.py`, который вызывает `ffmpeg` с фильтром `amix`.
-Скрипт ожидает набор WAV-файлов из `records_temp`, формирует итоговый файл в `records`
-и удаляет временную папку встречи после склейки. Итоговый файл именуется по дате и времени встречи.
+Склейка выполняется скриптом `bot/tools/merge_audio.sh`, который собирает чанки
+в `users/<user_id>/final.wav` и `mixed/final.wav` при наличии чанков.
 
 ## Что нужно реализовать в SDK-части
 
-В `bot/sdk_placeholder.py` оставлены инструкции и места для интеграции с Zoom Meeting SDK.
-Без реальной интеграции SDK бот не сможет подключиться к встрече и получить аудио:
-скрипт только создает структуру каталогов.
+В этом проекте Python выступает оркестратором, а реальная запись должна выполняться
+нативным бинарем `zoom_bot_recorder`, собранным с использованием Zoom Meeting SDK.
+Без него бот не сможет подключиться к встрече и получать аудио.
+
+Ожидаемый pipeline:
+
+1. `join_meeting` (SDK) — подключение к встрече.
+2. `capture_audio` (SDK callbacks → файлы).
+3. `merge_audio` (ffmpeg, склейка чанков).
+
+Бинарь должен принимать аргументы:
+
+```
+--meeting_id <id> --display_name <name> --out_dir <path> [--passcode <code>]
+```
 
 - Подключение к встрече по `meeting_id` и `passcode`.
 - Получение событий о пользователях (user_id → display_name).
@@ -98,6 +116,7 @@ records/
 - `ZOOM_SDK_KEY` – ключ SDK
 - `ZOOM_SDK_SECRET` – секрет SDK
 - `BOT_DISPLAY_NAME` – имя бота в встрече (по умолчанию `Meet.Ai`)
-- `RECORD_DIR` – каталог для итоговых файлов (по умолчанию `/data/records`)
-- `TEMP_RECORD_DIR` – каталог для временных файлов (по умолчанию `/data/records_temp`)
 - `RECORD_RETENTION_DAYS` – срок хранения итоговых файлов (по умолчанию 5 дней)
+- `DATA_DIR` – корневой каталог для хранения встреч (по умолчанию `/data`)
+- `ZOOM_RECORDER_BIN` – путь к бинарю Zoom SDK recorder
+- `MERGE_BIN` – путь к скрипту склейки аудио

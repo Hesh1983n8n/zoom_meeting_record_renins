@@ -18,8 +18,9 @@ services:
       - ZOOM_SDK_KEY=${ZOOM_SDK_KEY}
       - ZOOM_SDK_SECRET=${ZOOM_SDK_SECRET}
       - BOT_DISPLAY_NAME=${BOT_DISPLAY_NAME:-Meet.Ai}
-      - RECORD_DIR=/data/records
-      - TEMP_RECORD_DIR=/data/records_temp
+      - DATA_DIR=/data
       - RECORD_RETENTION_DAYS=5
+      - ZOOM_RECORDER_BIN=/app/bin/zoom_bot_recorder
+      - MERGE_BIN=/app/bin/merge_audio
     volumes:
       - E:\Docker_Prod\ReninsMeet:/data

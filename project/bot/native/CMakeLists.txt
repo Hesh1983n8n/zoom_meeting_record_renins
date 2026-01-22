@@ -11,6 +11,13 @@ if(ENABLE_RAW_AUDIO)
   target_compile_definitions(zoom_bot_recorder PRIVATE ENABLE_RAW_AUDIO=1)
 endif()
 
+set_target_properties(zoom_bot_recorder PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+)
+
+target_compile_options(zoom_bot_recorder PRIVATE -fPIC)
+target_link_options(zoom_bot_recorder PRIVATE -no-pie)
+
 set(ZOOM_SDK_DIR "/app/zoom_sdk")
 set(ZOOM_SDK_INC "${ZOOM_SDK_DIR}/include")
 set(ZOOM_SDK_LIB "${ZOOM_SDK_DIR}/lib")

@@ -18,6 +18,7 @@ def _parse_meeting_url(meeting_url: str) -> tuple[str, str | None]:
 def start_zoom_meeting_record(
     meeting_url: str,
     display_name: str,
+    passcode: str | None,
     record_dir: Path,
 ) -> tuple[str, str | None]:
     """
@@ -30,10 +31,11 @@ def start_zoom_meeting_record(
     4. Подписаться на Raw Audio callback и писать WAV по каждому user_id.
     5. Закрыть запись при окончании встречи.
     """
-    meeting_id, passcode = _parse_meeting_url(meeting_url)
+    meeting_id, parsed_passcode = _parse_meeting_url(meeting_url)
+    resolved_passcode = passcode or parsed_passcode
     meeting_path = record_dir / meeting_id
     meeting_path.mkdir(parents=True, exist_ok=True)
     dummy_file = meeting_path / "participant_000_placeholder.wav"
     if not dummy_file.exists():
         dummy_file.write_bytes(b"")
-    return meeting_id, passcode
+    return meeting_id, resolved_passcode

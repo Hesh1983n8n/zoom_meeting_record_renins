@@ -14,6 +14,7 @@ from sdk_placeholder import start_zoom_meeting_record
 class JoinRequest(BaseModel):
     meeting_url: str = Field(..., min_length=10)
     display_name: str = Field(default="Meet.Ai", min_length=1)
+    passcode: str | None = None
 
 
 class JoinResponse(BaseModel):
@@ -33,6 +34,7 @@ def join_meeting(payload: JoinRequest) -> JoinResponse:
     meeting_id, passcode = start_zoom_meeting_record(
         meeting_url=payload.meeting_url,
         display_name=payload.display_name,
+        passcode=payload.passcode,
         record_dir=temp_record_dir,
     )
     meeting_path = temp_record_dir / meeting_id

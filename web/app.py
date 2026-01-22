@@ -4,12 +4,14 @@ import os
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 
 class JoinRequest(BaseModel):
     meeting_url: str = Field(..., min_length=10)
     display_name: str = Field(default="Meet.Ai", min_length=1)
+    passcode: str | None = None
 
 
 class JoinResponse(BaseModel):
@@ -17,6 +19,43 @@ class JoinResponse(BaseModel):
 
 
 app = FastAPI(title="Zoom Meeting Join API")
+
+
+@app.get("/", response_class=HTMLResponse)
+def root() -> HTMLResponse:
+    html = """
+    <!doctype html>
+    <html lang="ru">
+      <head>
+        <meta charset="utf-8" />
+        <title>Meet.Ai Zoom Join</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 2rem; }
+          label { display: block; margin-top: 1rem; }
+          input { width: 100%; padding: 0.5rem; margin-top: 0.25rem; }
+          button { margin-top: 1.5rem; padding: 0.75rem 1.5rem; }
+          .note { color: #555; margin-top: 0.5rem; }
+        </style>
+      </head>
+      <body>
+        <h1>Подключение Meet.Ai к Zoom</h1>
+        <form method="post" action="/join">
+          <label>Ссылка на встречу Zoom
+            <input type="text" name="meeting_url" placeholder="https://zoom.us/j/123..." required />
+          </label>
+          <label>Имя бота
+            <input type="text" name="display_name" value="Meet.Ai" />
+          </label>
+          <label>Пароль встречи (опционально)
+            <input type="text" name="passcode" placeholder="Passcode" />
+          </label>
+          <div class="note">Пароль будет передан боту, даже если отсутствует в ссылке.</div>
+          <button type="submit">Подключиться</button>
+        </form>
+      </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
 
 
 @app.post("/join", response_model=JoinResponse)

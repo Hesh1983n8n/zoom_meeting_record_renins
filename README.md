@@ -36,12 +36,15 @@ docker compose up --build
 
 ### Подключение бота к встрече
 
+Откройте `http://localhost:3667/`, чтобы увидеть форму для подключения.
+
 `POST /join`
 
 ```json
 {
   "meeting_url": "https://zoom.us/j/123456789?pwd=passcode",
-  "display_name": "Meet.Ai"
+  "display_name": "Meet.Ai",
+  "passcode": "optional"
 }
 ```
 

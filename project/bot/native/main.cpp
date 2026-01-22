@@ -155,18 +155,14 @@ void WriteMetadata(const std::string &out_dir, const std::string &meeting_id) {
 
 class MeetingEventHandler : public IMeetingServiceEvent {
  public:
-  MeetingEventHandler(std::atomic<bool> &meeting_done,
-                      std::atomic<int> &last_status)
-      : meeting_done_(meeting_done), last_status_(last_status) {}
+  std::atomic<int> last_status{static_cast<int>(MEETING_STATUS_IDLE)};
+  std::atomic<int> last_result{0};
 
   void onMeetingStatusChanged(MeetingStatus status, int iResult) override {
+    last_status.store(static_cast<int>(status));
+    last_result.store(iResult);
     std::cout << "[recorder] meeting_status status=" << static_cast<int>(status)
               << " result=" << iResult << std::endl;
-    last_status_.store(static_cast<int>(status));
-    if (status == MEETING_STATUS_ENDED || status == MEETING_STATUS_DISCONNECTING ||
-        status == MEETING_STATUS_FAILED) {
-      meeting_done_.store(true);
-    }
   }
 
   void onMeetingStatisticsWarningNotification(StatisticsWarningType) override {}
@@ -177,10 +173,6 @@ class MeetingEventHandler : public IMeetingServiceEvent {
   void onMeetingFullToWatchLiveStream(const zchar_t *) override {}
   void onUserNetworkStatusChanged(MeetingComponentType, ConnectionQuality,
                                   unsigned int, bool) override {}
-
- private:
-  std::atomic<bool> &meeting_done_;
-  std::atomic<int> &last_status_;
 };
 
 class AuthEventHandler : public IAuthServiceEvent {
@@ -368,9 +360,7 @@ int main(int argc, char **argv) {
     return 7;
   }
 
-  std::atomic<bool> meeting_done{false};
-  std::atomic<int> last_status{-1};
-  auto meeting_events = std::make_unique<MeetingEventHandler>(meeting_done, last_status);
+  auto meeting_events = std::make_unique<MeetingEventHandler>();
   meeting_service->SetEvent(meeting_events.get());
 
   JoinParam join_param;
@@ -413,42 +403,38 @@ int main(int argc, char **argv) {
   auto meeting_start = std::chrono::steady_clock::now();
   auto last_log = meeting_start;
   bool in_meeting = false;
-  auto in_meeting_start = meeting_start;
-  bool logged_waiting_room = false;
-  while (!meeting_done.load()) {
+  while (true) {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
-    auto elapsed = std::chrono::steady_clock::now() - meeting_start;
-    auto elapsed_seconds =
-        std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-    int status_value = last_status.load();
-    if (status_value == MEETING_STATUS_INMEETING && !in_meeting) {
-      in_meeting = true;
-      in_meeting_start = std::chrono::steady_clock::now();
-      std::cout << "[recorder] in_meeting_start" << std::endl;
-    }
-    if (!logged_waiting_room &&
-        (status_value == MEETING_STATUS_WAITINGFORHOST ||
-         status_value == MEETING_STATUS_INWAITINGROOM)) {
-      std::cout << "[recorder] in waiting room" << std::endl;
-      logged_waiting_room = true;
-    }
-    if (!in_meeting && elapsed_seconds >= 60) {
-      std::cerr << "[recorder] in_meeting timeout" << std::endl;
-      break;
-    }
-    if (in_meeting) {
-      auto in_meeting_elapsed =
-          std::chrono::duration_cast<std::chrono::seconds>(
-              std::chrono::steady_clock::now() - in_meeting_start)
-              .count();
-      if (in_meeting_elapsed >= 120 && elapsed_seconds >= 300) {
-        std::cerr << "[recorder] meeting timeout" << std::endl;
-        break;
+
+    int status_value = meeting_events->last_status.load();
+    int result_value = meeting_events->last_result.load();
+
+    if (status_value == static_cast<int>(MEETING_STATUS_INMEETING)) {
+      if (!in_meeting) {
+        std::cout << "[recorder] in_meeting" << std::endl;
+        in_meeting = true;
       }
-    } else if (elapsed_seconds >= 300) {
-      std::cerr << "[recorder] meeting timeout" << std::endl;
+    } else if (status_value == static_cast<int>(MEETING_STATUS_IN_WAITING_ROOM)) {
+      std::cout << "[recorder] waiting_room (host must admit Meet.Ai)" << std::endl;
+    } else if (status_value == static_cast<int>(MEETING_STATUS_WAITINGFORHOST)) {
+      std::cout << "[recorder] waiting_for_host" << std::endl;
+    } else if (status_value == static_cast<int>(MEETING_STATUS_FAILED) ||
+               status_value == static_cast<int>(MEETING_STATUS_ENDED)) {
+      std::cerr << "[recorder] meeting_end_or_fail status=" << status_value
+                << " result=" << result_value << std::endl;
       break;
     }
+
+    auto elapsed_seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now() - meeting_start)
+            .count();
+    if (elapsed_seconds > 600) {
+      std::cerr << "[recorder] timeout waiting/meeting elapsed=" << elapsed_seconds
+                << "s" << std::endl;
+      break;
+    }
+
     if (std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::steady_clock::now() - last_log)
             .count() >= 2) {
@@ -456,6 +442,8 @@ int main(int argc, char **argv) {
                 << std::endl;
       last_log = std::chrono::steady_clock::now();
     }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
 #if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)

@@ -155,12 +155,14 @@ void WriteMetadata(const std::string &out_dir, const std::string &meeting_id) {
 
 class MeetingEventHandler : public IMeetingServiceEvent {
  public:
-  explicit MeetingEventHandler(std::atomic<bool> &meeting_done)
-      : meeting_done_(meeting_done) {}
+  MeetingEventHandler(std::atomic<bool> &meeting_done,
+                      std::atomic<int> &last_status)
+      : meeting_done_(meeting_done), last_status_(last_status) {}
 
   void onMeetingStatusChanged(MeetingStatus status, int iResult) override {
     std::cout << "[recorder] meeting_status status=" << static_cast<int>(status)
               << " result=" << iResult << std::endl;
+    last_status_.store(static_cast<int>(status));
     if (status == MEETING_STATUS_ENDED || status == MEETING_STATUS_DISCONNECTING ||
         status == MEETING_STATUS_FAILED) {
       meeting_done_.store(true);
@@ -178,6 +180,7 @@ class MeetingEventHandler : public IMeetingServiceEvent {
 
  private:
   std::atomic<bool> &meeting_done_;
+  std::atomic<int> &last_status_;
 };
 
 class AuthEventHandler : public IAuthServiceEvent {
@@ -366,7 +369,8 @@ int main(int argc, char **argv) {
   }
 
   std::atomic<bool> meeting_done{false};
-  auto meeting_events = std::make_unique<MeetingEventHandler>(meeting_done);
+  std::atomic<int> last_status{-1};
+  auto meeting_events = std::make_unique<MeetingEventHandler>(meeting_done, last_status);
   meeting_service->SetEvent(meeting_events.get());
 
   JoinParam join_param;
@@ -387,26 +391,70 @@ int main(int argc, char **argv) {
   std::ignore = std::system(mkdir_cmd.c_str());
   WriteMetadata(args.out_dir, args.meeting_id);
 
+  bool connect_only = (args.mode == "connect_only");
 #if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
-  ZOOMSDK::IZoomSDKAudioRawDataHelper *audio_helper =
-      ZOOMSDK::GetAudioRawdataHelper();
+  ZOOMSDK::IZoomSDKAudioRawDataHelper *audio_helper = nullptr;
   std::unique_ptr<AudioRawDelegate> audio_delegate;
-  if (!audio_helper) {
-    std::cerr << "[recorder] subscribe_audio SKIPPED helper_unavailable" << std::endl;
+  if (connect_only) {
+    std::cout << "[recorder] connect_only mode: skipping raw audio subscribe"
+              << std::endl;
   } else {
-    audio_delegate = std::make_unique<AudioRawDelegate>(args.out_dir);
-    SDKError sub_ret = audio_helper->subscribe(audio_delegate.get());
-    LogSdkError("[recorder] subscribe_audio", sub_ret);
+    audio_helper = ZOOMSDK::GetAudioRawdataHelper();
+    if (!audio_helper) {
+      std::cerr << "[recorder] subscribe_audio SKIPPED helper_unavailable" << std::endl;
+    } else {
+      audio_delegate = std::make_unique<AudioRawDelegate>(args.out_dir);
+      SDKError sub_ret = audio_helper->subscribe(audio_delegate.get());
+      LogSdkError("[recorder] subscribe_audio", sub_ret);
+    }
   }
 #endif
 
   auto meeting_start = std::chrono::steady_clock::now();
+  auto last_log = meeting_start;
+  bool in_meeting = false;
+  auto in_meeting_start = meeting_start;
+  bool logged_waiting_room = false;
   while (!meeting_done.load()) {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
     auto elapsed = std::chrono::steady_clock::now() - meeting_start;
-    if (std::chrono::duration_cast<std::chrono::hours>(elapsed).count() >= 8) {
+    auto elapsed_seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+    int status_value = last_status.load();
+    if (status_value == MEETING_STATUS_INMEETING && !in_meeting) {
+      in_meeting = true;
+      in_meeting_start = std::chrono::steady_clock::now();
+      std::cout << "[recorder] in_meeting_start" << std::endl;
+    }
+    if (!logged_waiting_room &&
+        (status_value == MEETING_STATUS_WAITINGFORHOST ||
+         status_value == MEETING_STATUS_INWAITINGROOM)) {
+      std::cout << "[recorder] in waiting room" << std::endl;
+      logged_waiting_room = true;
+    }
+    if (!in_meeting && elapsed_seconds >= 60) {
+      std::cerr << "[recorder] in_meeting timeout" << std::endl;
+      break;
+    }
+    if (in_meeting) {
+      auto in_meeting_elapsed =
+          std::chrono::duration_cast<std::chrono::seconds>(
+              std::chrono::steady_clock::now() - in_meeting_start)
+              .count();
+      if (in_meeting_elapsed >= 120 && elapsed_seconds >= 300) {
+        std::cerr << "[recorder] meeting timeout" << std::endl;
+        break;
+      }
+    } else if (elapsed_seconds >= 300) {
       std::cerr << "[recorder] meeting timeout" << std::endl;
       break;
+    }
+    if (std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now() - last_log)
+            .count() >= 2) {
+      std::cout << "[recorder] still running, status=" << status_value
+                << std::endl;
+      last_log = std::chrono::steady_clock::now();
     }
   }
 

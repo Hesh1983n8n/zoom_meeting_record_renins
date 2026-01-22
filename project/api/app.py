@@ -1,4 +1,6 @@
+import base64
 import json
+import logging
 import os
 import re
 import time
@@ -18,6 +20,9 @@ class JoinRequest(BaseModel):
 
 
 app = FastAPI()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("zoom-bot-api")
 
 
 @app.get("/")
@@ -115,6 +120,7 @@ QUEUE_NAME = os.getenv("QUEUE_NAME", "zoom_jobs")
 BOT_DISPLAY_NAME = os.getenv("BOT_DISPLAY_NAME", "Meet.Ai")
 SDK_KEY = os.getenv("ZOOM_MEETING_SDK_KEY", "")
 SDK_SECRET = os.getenv("ZOOM_MEETING_SDK_SECRET", "")
+SIGNATURE_MODE = os.getenv("SIGNATURE_MODE", "sdk_auth").lower()
 
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -138,12 +144,17 @@ def parse_passcode(meeting_url: str, explicit_passcode: Optional[str]) -> Option
     return query.get("pwd", [None])[0]
 
 
-def generate_signature(meeting_id: str) -> str:
-    if not SDK_KEY or not SDK_SECRET:
-        raise ValueError("Missing ZOOM_MEETING_SDK_KEY or ZOOM_MEETING_SDK_SECRET")
-    timestamp = int(time.time())
-    exp = timestamp + 300
-    payload = {
+def _build_sdk_auth_payload(timestamp: int, exp: int) -> dict:
+    return {
+        "sdkKey": SDK_KEY,
+        "iat": timestamp,
+        "exp": exp,
+        "tokenExp": exp,
+    }
+
+
+def _build_meeting_sdk_payload(meeting_id: str, timestamp: int, exp: int) -> dict:
+    return {
         "sdkKey": SDK_KEY,
         "mn": meeting_id,
         "role": 0,
@@ -152,7 +163,55 @@ def generate_signature(meeting_id: str) -> str:
         "appKey": SDK_KEY,
         "tokenExp": exp,
     }
-    return jwt.encode(payload, SDK_SECRET, algorithm="HS256")
+
+
+def _decode_jwt_payload(token: str) -> dict:
+    try:
+        payload_b64 = token.split(".")[1]
+        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
+        decoded = base64.urlsafe_b64decode(padded.encode("utf-8"))
+        return json.loads(decoded.decode("utf-8"))
+    except (IndexError, ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("Unable to decode JWT payload") from exc
+
+
+def _log_payload_times(payload: dict) -> None:
+    now = int(time.time())
+    iat = payload.get("iat")
+    exp = payload.get("exp")
+    token_exp = payload.get("tokenExp")
+    logger.info(
+        "jwt_payload_times iat=%s exp=%s tokenExp=%s now=%s",
+        iat,
+        exp,
+        token_exp,
+        now,
+    )
+    if iat is None or exp is None or token_exp is None:
+        logger.error("auth rc=15 name=SDKERR_UNAUTHENTICATION reason=missing_fields")
+        raise ValueError("JWT payload missing required time fields")
+    if iat > now or exp <= now or token_exp <= now:
+        logger.error("auth rc=15 name=SDKERR_UNAUTHENTICATION reason=time_invalid")
+        raise ValueError("JWT time validation failed")
+
+
+def generate_signature(meeting_id: str) -> str:
+    if not SDK_KEY or not SDK_SECRET:
+        raise ValueError("Missing ZOOM_MEETING_SDK_KEY or ZOOM_MEETING_SDK_SECRET")
+    timestamp = int(time.time())
+    exp = timestamp + 300
+    if SIGNATURE_MODE == "sdk_auth":
+        payload = _build_sdk_auth_payload(timestamp, exp)
+    elif SIGNATURE_MODE == "meeting_sdk":
+        payload = _build_meeting_sdk_payload(meeting_id, timestamp, exp)
+    else:
+        raise ValueError(f"Unsupported SIGNATURE_MODE: {SIGNATURE_MODE}")
+
+    token = jwt.encode(payload, SDK_SECRET, algorithm="HS256")
+    decoded_payload = _decode_jwt_payload(token)
+    logger.info("jwt_mode=%s payload=%s", SIGNATURE_MODE, decoded_payload)
+    _log_payload_times(decoded_payload)
+    return token
 
 
 @app.post("/join")

@@ -8,6 +8,9 @@
 #include <thread>
 #include <vector>
 
+// Zoom Meeting SDK for Linux v6.7.2.7020 headers:
+// - meeting_service_interface.h
+// - rawdata/rawdata_audio_helper_interface.h
 #include "meeting_service_interface.h"
 #include "zoom_sdk.h"
 #include "zoom_sdk_raw_data_def.h"
@@ -23,6 +26,30 @@
 #endif
 
 using namespace ZOOM_SDK_NAMESPACE;
+
+const char *SDKErrorToString(SDKError code) {
+  switch (code) {
+    case SDKERR_SUCCESS:
+      return "SDKERR_SUCCESS";
+    case SDKERR_INVALID_PARAMETER:
+      return "SDKERR_INVALID_PARAMETER";
+    case SDKERR_UNINITIALIZE:
+      return "SDKERR_UNINITIALIZE";
+    case SDKERR_UNAUTHENTICATION:
+      return "SDKERR_UNAUTHENTICATION";
+    case SDKERR_NO_PERMISSION:
+      return "SDKERR_NO_PERMISSION";
+    case SDKERR_SERVICE_FAILED:
+      return "SDKERR_SERVICE_FAILED";
+    default:
+      return "SDKERR_UNKNOWN";
+  }
+}
+
+void LogSdkError(const std::string &label, SDKError code) {
+  std::cout << label << " code=" << static_cast<int>(code)
+            << " name=" << SDKErrorToString(code) << std::endl;
+}
 
 struct Args {
   std::string meeting_id;
@@ -181,15 +208,14 @@ int main(int argc, char **argv) {
   InitParam init_param;
   init_param.strWebDomain = "https://zoom.us";
   SDKError init_ret = InitSDK(init_param);
-  std::cout << "[recorder] init_sdk code=" << static_cast<int>(init_ret) << std::endl;
+  LogSdkError("[recorder] init_sdk", init_ret);
   if (init_ret != SDKERR_SUCCESS) {
     return 2;
   }
 
   IMeetingService *meeting_service = nullptr;
   SDKError meeting_ret = CreateMeetingService(&meeting_service);
-  std::cout << "[recorder] create_meeting_service code=" << static_cast<int>(meeting_ret)
-            << std::endl;
+  LogSdkError("[recorder] create_meeting_service", meeting_ret);
   if (meeting_ret != SDKERR_SUCCESS || !meeting_service) {
     return 3;
   }
@@ -208,7 +234,7 @@ int main(int argc, char **argv) {
 
   std::cout << "[recorder] join_meeting start" << std::endl;
   SDKError join_ret = meeting_service->Join(join_param);
-  std::cout << "[recorder] join code=" << static_cast<int>(join_ret) << std::endl;
+  LogSdkError("[recorder] join", join_ret);
 
 #if ZOOMSDK_HAS_RAW_AUDIO
   IZoomSDKAudioRawDataHelper *audio_helper = GetAudioRawDataHelper();
@@ -217,7 +243,7 @@ int main(int argc, char **argv) {
   } else {
     AudioRawDelegate audio_delegate(args.out_dir);
     SDKError sub_ret = audio_helper->subscribe(&audio_delegate);
-    std::cout << "[recorder] subscribe_audio code=" << static_cast<int>(sub_ret) << std::endl;
+    LogSdkError("[recorder] subscribe_audio", sub_ret);
   }
 #else
   std::cout << "[recorder] subscribe_audio SKIPPED raw_audio_headers_missing" << std::endl;

@@ -1,5 +1,5 @@
-#include <dlfcn.h>
 #include <chrono>
+#include <atomic>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -10,10 +10,12 @@
 
 // Zoom Meeting SDK for Linux v6.7.2.7020 headers:
 // - meeting_service_interface.h
+// - auth_service_interface.h
 // - rawdata/rawdata_audio_helper_interface.h
 #include "meeting_service_interface.h"
 #include "zoom_sdk.h"
 #include "zoom_sdk_raw_data_def.h"
+#include "auth_service_interface.h"
 #include "rawdata/rawdata_audio_helper_interface.h"
 #include "rawdata/zoom_rawdata_api.h"
 
@@ -51,6 +53,11 @@ const char *SDKErrorToString(SDKError code) {
 void LogSdkError(const std::string &label, SDKError code) {
   std::cout << label << " code=" << static_cast<int>(code)
             << " name=" << SDKErrorToString(code) << std::endl;
+}
+
+std::string GetEnvVar(const char *key) {
+  const char *value = std::getenv(key);
+  return value ? value : "";
 }
 
 struct Args {
@@ -113,6 +120,22 @@ class MeetingEventHandler : public IMeetingServiceEvent {
   void onMeetingFullToWatchLiveStream(const zchar_t *) override {}
   void onUserNetworkStatusChanged(MeetingComponentType, ConnectionQuality,
                                   unsigned int, bool) override {}
+};
+
+class AuthEventHandler : public IAuthServiceEvent {
+ public:
+  explicit AuthEventHandler(std::atomic<bool> &authed)
+      : authed_(authed) {}
+
+  void onAuthenticationReturn(SDKError code) override {
+    LogSdkError("[recorder] auth return", code);
+    if (code == SDKERR_SUCCESS) {
+      authed_.store(true);
+    }
+  }
+
+ private:
+  std::atomic<bool> &authed_;
 };
 
 #if ZOOMSDK_HAS_RAW_AUDIO
@@ -199,14 +222,6 @@ int main(int argc, char **argv) {
   const char *ld_path = std::getenv("LD_LIBRARY_PATH");
   std::cout << "[recorder] LD_LIBRARY_PATH=" << (ld_path ? ld_path : "") << std::endl;
 
-  void *handle = dlopen("libzoomsdk.so", RTLD_NOW | RTLD_GLOBAL);
-  if (!handle) {
-    std::cerr << "[recorder] dlopen libzoomsdk.so FAIL " << dlerror() << std::endl;
-  } else {
-    std::cout << "[recorder] dlopen libzoomsdk.so OK" << std::endl;
-    dlclose(handle);
-  }
-
   InitParam init_param;
   init_param.strWebDomain = "https://zoom.us";
   SDKError init_ret = InitSDK(init_param);
@@ -215,11 +230,48 @@ int main(int argc, char **argv) {
     return 2;
   }
 
+  std::string sdk_key = GetEnvVar("ZOOM_MEETING_SDK_KEY");
+  if (sdk_key.empty()) {
+    std::cerr << "[recorder] auth missing_sdk_key_env ZOOM_MEETING_SDK_KEY"
+              << std::endl;
+    return 3;
+  }
+
+  IAuthService *auth_service = nullptr;
+  SDKError auth_service_ret = CreateAuthService(&auth_service);
+  LogSdkError("[recorder] create_auth_service", auth_service_ret);
+  if (auth_service_ret != SDKERR_SUCCESS || !auth_service) {
+    return 4;
+  }
+
+  std::atomic<bool> authed{false};
+  AuthEventHandler auth_events(authed);
+  auth_service->SetEvent(&auth_events);
+
+  AuthParam auth_param;
+  auth_param.sdkKey = sdk_key.c_str();
+  auth_param.jwtToken = args.signature.c_str();
+
+  std::cout << "[recorder] auth start" << std::endl;
+  SDKError auth_ret = auth_service->SDKAuth(auth_param);
+  LogSdkError("[recorder] auth", auth_ret);
+  if (auth_ret != SDKERR_SUCCESS) {
+    return 5;
+  }
+
+  for (int i = 0; i < 100 && !authed.load(); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  if (!authed.load()) {
+    std::cerr << "[recorder] auth timeout" << std::endl;
+    return 6;
+  }
+
   IMeetingService *meeting_service = nullptr;
   SDKError meeting_ret = CreateMeetingService(&meeting_service);
   LogSdkError("[recorder] create_meeting_service", meeting_ret);
   if (meeting_ret != SDKERR_SUCCESS || !meeting_service) {
-    return 3;
+    return 7;
   }
 
   MeetingEventHandler meeting_events;
@@ -233,9 +285,8 @@ int main(int argc, char **argv) {
   join_without_login.psw = args.passcode.c_str();
   join_without_login.userName = args.display_name.c_str();
   join_without_login.userZAK = "";
-  join_without_login.app_privilege_token = args.signature.c_str();
 
-  std::cout << "[recorder] join_meeting start" << std::endl;
+  std::cout << "[recorder] join start" << std::endl;
   SDKError join_ret = meeting_service->Join(join_param);
   LogSdkError("[recorder] join", join_ret);
 
@@ -252,8 +303,6 @@ int main(int argc, char **argv) {
     SDKError sub_ret = audio_helper->subscribe(&audio_delegate);
     LogSdkError("[recorder] subscribe_audio", sub_ret);
   }
-#else
-  std::cout << "[recorder] subscribe_audio SKIPPED raw_audio_disabled" << std::endl;
 #endif
 
   std::string mkdir_cmd = "mkdir -p " + args.out_dir + "/users " + args.out_dir + "/mixed";

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(zoom_bot_recorder main.cpp)
 
-option(ENABLE_RAW_AUDIO "Enable raw audio" OFF)
+option(ENABLE_RAW_AUDIO "Enable raw audio" ON)
 if(ENABLE_RAW_AUDIO)
   target_compile_definitions(zoom_bot_recorder PRIVATE ENABLE_RAW_AUDIO=1)
 endif()

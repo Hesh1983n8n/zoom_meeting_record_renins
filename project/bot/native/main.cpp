@@ -227,7 +227,7 @@ int main(int argc, char **argv) {
 
   JoinParam join_param;
   join_param.userType = SDK_UT_WITHOUT_LOGIN;
-  auto &join_without_login = join_param.param.withoutlogin;
+  auto &join_without_login = join_param.param.withoutloginuserJoin;
   join_without_login.meetingNumber = std::stoull(args.meeting_id);
   join_without_login.psw = args.passcode.c_str();
   join_without_login.userName = args.display_name.c_str();

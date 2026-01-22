@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  web:
+    build: ./web
+    ports:
+      - "3667:3667"
+    environment:
+      - BOT_HTTP_URL=http://bot:8080
+    depends_on:
+      - bot
+    volumes:
+      - ./data:/data
+
+  bot:
+    build: ./bot
+    environment:
+      - ZOOM_SDK_KEY=${ZOOM_SDK_KEY}
+      - ZOOM_SDK_SECRET=${ZOOM_SDK_SECRET}
+      - BOT_DISPLAY_NAME=${BOT_DISPLAY_NAME:-Meet.Ai}
+      - RECORD_DIR=/data/recordings
+    volumes:
+      - ./data:/data

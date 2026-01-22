@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: zoom-recorder-redis
+
+  api:
+    build: ./api
+    container_name: zoom-recorder-api
+    env_file: .env
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - QUEUE_NAME=${QUEUE_NAME}
+      - BOT_DISPLAY_NAME=${BOT_DISPLAY_NAME}
+      - ZOOM_MEETING_SDK_KEY=${ZOOM_MEETING_SDK_KEY}
+      - ZOOM_MEETING_SDK_SECRET=${ZOOM_MEETING_SDK_SECRET}
+    ports:
+      - "${API_PORT}:3667"
+    depends_on:
+      - redis
+
+  bot-worker:
+    build: ./bot
+    container_name: zoom-recorder-bot
+    env_file: .env
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - QUEUE_NAME=${QUEUE_NAME}
+      - BOT_DISPLAY_NAME=${BOT_DISPLAY_NAME}
+      - DATA_DIR=${DATA_DIR}
+    volumes:
+      - ./data:/data
+    depends_on:
+      - redis

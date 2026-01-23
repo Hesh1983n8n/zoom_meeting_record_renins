@@ -32,11 +32,34 @@ def index():
 
 @app.route("/api/status")
 def status():
-    try:
-        resp = requests.get(f"{BOT_BASE_URL}/api/v1/status", timeout=5)
-        return jsonify(resp.json())
-    except requests.RequestException:
-        return jsonify({"ok": False, "error": "BOT_UNAVAILABLE"}), 502
+    url = f"{BOT_BASE_URL}/api/v1/status"
+    for _ in range(2):
+        try:
+            resp = requests.get(url, timeout=5)
+            return jsonify(resp.json())
+        except (requests.ConnectionError, requests.Timeout):
+            continue
+        except requests.RequestException:
+            break
+    return jsonify({"ok": False, "error": "BOT_UNAVAILABLE", "url": url}), 502
+
+
+@app.route("/api/diag")
+def diag():
+    return jsonify(
+        {
+            "auth_token_url": f"{AUTH_BASE_URL}{AUTH_TOKEN_ENDPOINT}",
+            "bot_status_url": f"{BOT_BASE_URL}/api/v1/status",
+            "bot_join_url": f"{BOT_BASE_URL}/api/v1/join",
+            "bot_leave_url": f"{BOT_BASE_URL}/api/v1/leave",
+            "env": {
+                "AUTH_BASE_URL": AUTH_BASE_URL,
+                "AUTH_TOKEN_ENDPOINT": AUTH_TOKEN_ENDPOINT,
+                "BOT_BASE_URL": BOT_BASE_URL,
+                "BOT_DISPLAY_NAME": BOT_DISPLAY_NAME,
+            },
+        }
+    )
 
 
 def fetch_meeting_sdk_jwt():

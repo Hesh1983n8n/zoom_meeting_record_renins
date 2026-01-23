@@ -23,7 +23,7 @@ RUN cmake -S /app -B /app/build -DSDK_ROOT=/opt/sdk \
 FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
+    ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/sdk /opt/sdk

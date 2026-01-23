@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   bot:
     build:
@@ -11,6 +9,11 @@ services:
       - "3667:3667"
     volumes:
       - "E:/Docker_Prod/ReninsMeet/records:/records"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3667/api/v1/status"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
     restart: unless-stopped
   web:
     build:
@@ -20,5 +23,6 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - bot
+      bot:
+        condition: service_healthy
     restart: unless-stopped

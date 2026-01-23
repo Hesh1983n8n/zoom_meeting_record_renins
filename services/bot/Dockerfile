@@ -24,6 +24,22 @@ FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl procps \
+    libatomic1 \
+    libx11-6 \
+    libxcb1 \
+    libxcb-xfixes0 \
+    libxcb-shape0 \
+    libxcb-shm0 \
+    libxcb-randr0 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-xtest0 \
+    libglib2.0-0 \
+    libgbm1 \
+    libdrm2 \
+    libxfixes3 \
+    libdbus-1-3 \
+    libgl1 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/sdk /opt/sdk

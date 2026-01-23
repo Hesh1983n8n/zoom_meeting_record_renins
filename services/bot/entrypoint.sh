@@ -25,5 +25,8 @@ fi
 echo "[entrypoint] ldd /usr/local/bin/zoom_bot:"
 ldd /usr/local/bin/zoom_bot || true
 
+echo "[entrypoint] ldd /opt/sdk/libmeetingsdk.so:"
+ldd /opt/sdk/libmeetingsdk.so || true
+
 echo "[entrypoint] starting zoom_bot"
 exec /usr/local/bin/zoom_bot

@@ -17,8 +17,8 @@ RUN /app/scripts/validate_sdk_layout.sh /opt/sdk
 COPY CMakeLists.txt /app/CMakeLists.txt
 COPY src/ /app/src/
 
-RUN cmake -S /app -B /app/build -DSDK_ROOT=/opt/sdk \
-  && cmake --build /app/build -j$(nproc)
+RUN cmake -S /app -B /app/build -DSDK_ROOT=/opt/sdk -DCMAKE_VERBOSE_MAKEFILE=ON \
+  && cmake --build /app/build -- VERBOSE=1
 
 FROM ubuntu:22.04
 

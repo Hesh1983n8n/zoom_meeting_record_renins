@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  bot:
+    build:
+      context: ./services/bot
+    env_file:
+      - .env
+    ports:
+      - "3667:3667"
+    volumes:
+      - "E:/Docker_Prod/ReninsMeet/records:/records"
+    restart: unless-stopped
+  web:
+    build:
+      context: ./services/web
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - bot
+    restart: unless-stopped

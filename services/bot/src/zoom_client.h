@@ -2,10 +2,16 @@
 
 #include <condition_variable>
 #include <mutex>
+#include <memory>
 #include <optional>
 #include <string>
 
 #include "recorder.h"
+
+namespace ZOOMSDK {
+class IAuthService;
+class IMeetingService;
+}  // namespace ZOOMSDK
 
 struct JoinRequest {
   std::string meeting_url;
@@ -41,6 +47,9 @@ class ZoomClient {
   std::string SdkError() const { return sdk_error_; }
 
  private:
+  class AuthEventHandler;
+  class MeetingEventHandler;
+
   void SetState(RecorderState state, const std::optional<std::string>& error = std::nullopt);
   Recorder& recorder_;
   RecorderStatus status_{};
@@ -52,6 +61,15 @@ class ZoomClient {
   std::string sdk_error_;
   int last_auth_code_ = 0;
   int last_join_code_ = 0;
+  bool auth_done_ = false;
+  bool auth_ok_ = false;
+  bool join_done_ = false;
+  bool join_ok_ = false;
   mutable std::mutex mutex_;
   mutable std::condition_variable cv_;
+
+  ZOOMSDK::IAuthService* auth_service_ = nullptr;
+  ZOOMSDK::IMeetingService* meeting_service_ = nullptr;
+  std::unique_ptr<AuthEventHandler> auth_event_handler_;
+  std::unique_ptr<MeetingEventHandler> meeting_event_handler_;
 };

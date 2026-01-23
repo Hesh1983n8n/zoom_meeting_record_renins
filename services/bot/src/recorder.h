@@ -36,7 +36,9 @@ struct ParticipantTrack {
 
 enum class RecorderState {
   Idle,
+  Authing,
   Joining,
+  InMeeting,
   Recording,
   Finalizing,
   Done,

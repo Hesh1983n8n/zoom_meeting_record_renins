@@ -64,8 +64,12 @@ std::string StateToString(RecorderState state) {
   switch (state) {
     case RecorderState::Idle:
       return "idle";
+    case RecorderState::Authing:
+      return "authing";
     case RecorderState::Joining:
       return "joining";
+    case RecorderState::InMeeting:
+      return "in_meeting";
     case RecorderState::Recording:
       return "recording";
     case RecorderState::Finalizing:

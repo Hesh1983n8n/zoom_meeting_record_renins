@@ -59,6 +59,7 @@ services/bot/third_party/sdk/zoom-meeting-sdk-linux_x86_64-6.7.2.7020/
 AUTH_BASE_URL=https://mymeetai.site
 AUTH_TOKEN_ENDPOINT=/token/meeting-sdk-jwt
 AUTH_API_KEY=***
+AUTH_HEADER=Bearer ***
 BOT_BASE_URL=http://bot:3667
 ```
 
@@ -190,3 +191,5 @@ Web UI получает JWT для Meeting SDK через подтверждён
 
 - `Authorization: Bearer <AUTH_API_KEY>` (если ключ задан)
 - `Accept: application/json`
+
+Если требуется нестандартный заголовок авторизации, задайте `AUTH_HEADER` полностью (например, `Authorization: Bearer ...`) — он имеет приоритет над `AUTH_API_KEY`.

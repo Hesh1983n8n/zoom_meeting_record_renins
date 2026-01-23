@@ -72,7 +72,7 @@ def mask_jwts(text: str) -> str:
 def build_auth_headers():
     if not MEETAI_API_KEY:
         return None
-    return {"Accept": "application/json", "Authorization": f"Bearer {MEETAI_API_KEY}"}
+    return {"Accept": "application/json", "x-api-key": MEETAI_API_KEY}
 
 
 def fetch_meetai_token():
@@ -113,15 +113,34 @@ def fetch_meetai_token():
             "details": "invalid JSON",
         }
 
-    token = data.get("meeting_sdk_jwt") or data.get("sdk_jwt") or data.get("token")
+    response_type = "object"
+    token = None
+    if isinstance(data, str):
+        response_type = "string"
+        token = data
+    elif isinstance(data, dict):
+        token = (
+            data.get("meeting_sdk_jwt")
+            or data.get("sdk_jwt")
+            or data.get("token")
+            or data.get("jwt")
+        )
+
     if not token:
+        snippet = mask_jwts(resp.text[:300]) if resp.text else ""
         return None, {
             "ok": False,
             "error": "AUTH_ERROR",
             "status_code": resp.status_code,
             "details": "token field not found",
+            "response_snippet": snippet,
         }
-    return token, {"ok": True, "response": data, "auth_url": auth_url}
+    return token, {
+        "ok": True,
+        "response": data,
+        "auth_url": auth_url,
+        "response_type": response_type,
+    }
 
 
 @app.route("/api/start", methods=["POST"])
@@ -186,13 +205,16 @@ def test_auth():
         return jsonify(auth_result), status_code
 
     auth_json = auth_result["response"]
+    response_type = auth_result["response_type"]
+    response_keys = list(auth_json.keys()) if isinstance(auth_json, dict) else []
     return jsonify(
         {
             "ok": True,
             "auth_url": auth_result["auth_url"],
             "token_present": bool(token),
             "token_prefix": token[:10] if token else "",
-            "response_keys": list(auth_json.keys()),
+            "response_type": response_type,
+            "response_keys": response_keys,
         }
     )
 

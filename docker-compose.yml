@@ -25,6 +25,8 @@ services:
     environment:
       BOT_BASE_URL: http://bot:3667
       MEETAI_API_KEY: ${MEETAI_API_KEY}
+      AUTH_BASE_URL: https://mymeetai.site
+      AUTH_TOKEN_ENDPOINT: /token/meeting-sdk-jwt
     ports:
       - "8080:8080"
     depends_on:

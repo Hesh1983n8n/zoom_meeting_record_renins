@@ -188,5 +188,5 @@ Web UI получает JWT для Meeting SDK через подтверждён
 
 Заголовки запроса:
 
-- `Authorization: Bearer <MEETAI_API_KEY>`
+- `x-api-key: <MEETAI_API_KEY>`
 - `Accept: application/json`

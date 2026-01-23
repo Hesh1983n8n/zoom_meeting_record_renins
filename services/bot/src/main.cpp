@@ -121,6 +121,9 @@ int main() {
       auto meeting_url = JsonGetString(req.body, "meeting_url");
       auto display_name = JsonGetString(req.body, "display_name");
       auto sdk_auth_token = JsonGetString(req.body, "sdk_auth_token");
+      if (!sdk_auth_token) {
+        sdk_auth_token = JsonGetString(req.body, "sdk_jwt");
+      }
       auto recording_token = JsonGetString(req.body, "recording_token");
       auto passcode = JsonGetString(req.body, "passcode");
 

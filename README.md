@@ -190,3 +190,5 @@ Web UI получает JWT для Meeting SDK через подтверждён
 
 - `x-api-key: <MEETAI_API_KEY>`
 - `Accept: application/json`
+
+Ответ может быть JSON-объектом вида `{"signature":"<jwt>","appKey":"<...>"}` — Web UI использует `signature` и передаёт его в bot как `sdk_jwt`.

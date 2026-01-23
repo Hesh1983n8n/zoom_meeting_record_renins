@@ -120,7 +120,8 @@ def fetch_meetai_token():
         token = data
     elif isinstance(data, dict):
         token = (
-            data.get("meeting_sdk_jwt")
+            data.get("signature")
+            or data.get("meeting_sdk_jwt")
             or data.get("sdk_jwt")
             or data.get("token")
             or data.get("jwt")
@@ -168,7 +169,7 @@ def start():
         "meeting_url": meeting_url,
         "passcode": pwd,
         "display_name": BOT_DISPLAY_NAME,
-        "auth": {"sdk_auth_token": token},
+        "sdk_jwt": token,
     }
 
     try:
@@ -207,6 +208,7 @@ def test_auth():
     auth_json = auth_result["response"]
     response_type = auth_result["response_type"]
     response_keys = list(auth_json.keys()) if isinstance(auth_json, dict) else []
+    app_key = auth_json.get("appKey") if isinstance(auth_json, dict) else None
     return jsonify(
         {
             "ok": True,
@@ -215,6 +217,7 @@ def test_auth():
             "token_prefix": token[:10] if token else "",
             "response_type": response_type,
             "response_keys": response_keys,
+            "app_key": app_key,
         }
     )
 

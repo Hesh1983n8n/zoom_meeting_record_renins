@@ -32,6 +32,12 @@ else
   echo "[entrypoint] Missing /opt/sdk/qt_libs" >&2
 fi
 
+if [[ -f /opt/sdk/libmeetingsdk.so ]] && [[ ! -e /opt/sdk/libmeetingsdk.so.1 ]]; then
+  echo "[entrypoint] Creating libmeetingsdk.so.1 symlink"
+  ln -s /opt/sdk/libmeetingsdk.so /opt/sdk/libmeetingsdk.so.1
+fi
+ldconfig || true
+
 echo "[entrypoint] ldd /usr/local/bin/zoom_bot:"
 ldd /usr/local/bin/zoom_bot || true
 echo "[entrypoint] (expect) zoom_bot should depend on libmeetingsdk.so"

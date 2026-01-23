@@ -66,6 +66,8 @@ COPY entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh
 
+RUN echo "/opt/sdk" > /etc/ld.so.conf.d/zoom-sdk.conf && ldconfig
+
 ENV LD_LIBRARY_PATH=/opt/sdk:/opt/sdk/qt_libs/Qt/lib:/opt/sdk/qt_libs
 ENV RECORDS_DIR=/records
 ENV BOT_PORT=3667

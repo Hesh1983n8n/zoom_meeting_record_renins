@@ -27,6 +27,11 @@ add_executable(zoom_bot
   src/util_sanitize.cpp
 )
 
-target_link_libraries(zoom_bot PRIVATE pthread dl)
+add_library(meetingsdk SHARED IMPORTED)
+set_target_properties(meetingsdk PROPERTIES IMPORTED_LOCATION "${SDK_ROOT}/libmeetingsdk.so")
+
+target_link_options(zoom_bot PRIVATE "-Wl,--no-as-needed")
+target_link_options(zoom_bot PRIVATE "-Wl,-rpath,${SDK_ROOT}" "-Wl,-rpath,${SDK_ROOT}/qt_libs/Qt/lib")
+target_link_libraries(zoom_bot PRIVATE meetingsdk pthread dl)
 
 install(TARGETS zoom_bot RUNTIME DESTINATION /usr/local/bin)

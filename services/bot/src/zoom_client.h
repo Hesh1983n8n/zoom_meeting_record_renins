@@ -1,5 +1,7 @@
 #pragma once
 
+#include <condition_variable>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -23,6 +25,7 @@ class ZoomClient {
   explicit ZoomClient(Recorder& recorder);
 
   bool EnsureSdkLoaded(std::string& error_message);
+  bool InitSdkOnce(std::string& error_message, int& code);
   bool SdkAuth(const std::string& jwt, std::string& error_message, int& code);
   bool JoinMeeting(const std::string& meeting_id,
                    const std::string& passcode,
@@ -38,9 +41,17 @@ class ZoomClient {
   std::string SdkError() const { return sdk_error_; }
 
  private:
+  void SetState(RecorderState state, const std::optional<std::string>& error = std::nullopt);
   Recorder& recorder_;
   RecorderStatus status_{};
   void* sdk_handle_ = nullptr;
   bool sdk_loaded_ = false;
+  bool sdk_inited_ = false;
+  bool authed_ = false;
+  bool in_meeting_ = false;
   std::string sdk_error_;
+  int last_auth_code_ = 0;
+  int last_join_code_ = 0;
+  std::mutex mutex_;
+  std::condition_variable cv_;
 };

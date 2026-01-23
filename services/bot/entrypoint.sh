@@ -24,6 +24,8 @@ fi
 
 echo "[entrypoint] ldd /usr/local/bin/zoom_bot:"
 ldd /usr/local/bin/zoom_bot || true
+echo "[entrypoint] (expect) zoom_bot should depend on libmeetingsdk.so"
+ldd /usr/local/bin/zoom_bot | grep -E "libmeetingsdk\\.so" || echo "[entrypoint] WARNING: zoom_bot is not linked to libmeetingsdk.so"
 
 echo "[entrypoint] ldd /opt/sdk/libmeetingsdk.so:"
 ldd /opt/sdk/libmeetingsdk.so || true

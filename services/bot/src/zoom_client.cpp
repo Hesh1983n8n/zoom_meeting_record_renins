@@ -1,5 +1,6 @@
 #include "zoom_client.h"
 
+#include <dlfcn.h>
 #include <iostream>
 
 ZoomClient::ZoomClient(Recorder& recorder) : recorder_(recorder) {
@@ -37,4 +38,17 @@ RecorderStatus ZoomClient::Status() const {
     current.error = status_.error;
   }
   return current;
+}
+
+bool ZoomClient::ProbeSdkLoaded(std::string* error_message) const {
+  void* handle = dlopen("libmeetingsdk.so", RTLD_NOW);
+  if (!handle) {
+    if (error_message) {
+      const char* err = dlerror();
+      *error_message = err ? err : "dlopen failed";
+    }
+    return false;
+  }
+  dlclose(handle);
+  return true;
 }

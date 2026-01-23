@@ -29,6 +29,7 @@ add_executable(zoom_bot
 add_library(meetingsdk SHARED IMPORTED)
 set_target_properties(meetingsdk PROPERTIES IMPORTED_LOCATION "${SDK_ROOT}/libmeetingsdk.so")
 
+target_link_options(zoom_bot PRIVATE "-Wl,--no-as-needed")
 target_link_libraries(zoom_bot PRIVATE meetingsdk pthread dl)
 
 install(TARGETS zoom_bot RUNTIME DESTINATION /usr/local/bin)

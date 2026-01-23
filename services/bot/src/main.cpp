@@ -91,6 +91,17 @@ int main() {
     ZoomClient zoom_client(recorder);
     HttpServer server;
 
+    std::string sdk_error;
+    bool sdk_ok = zoom_client.ProbeSdkLoaded(&sdk_error);
+    if (sdk_ok) {
+      std::cout << "SDK probe: ok" << std::endl;
+    } else {
+      std::cout << "SDK probe: fail" << std::endl;
+      if (!sdk_error.empty()) {
+        std::cout << "SDK probe error: " << sdk_error << std::endl;
+      }
+    }
+
     server.AddRoute("POST", "/api/v1/join", [&](const HttpRequest& req) {
       JoinRequest join_request;
       auto meeting_url = JsonGetString(req.body, "meeting_url");

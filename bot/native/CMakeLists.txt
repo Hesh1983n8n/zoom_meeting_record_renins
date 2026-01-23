@@ -3,6 +3,7 @@ project(zoom_bot_recorder LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_executable(zoom_bot_recorder main.cpp)
 
@@ -11,11 +12,6 @@ if(ENABLE_RAW_AUDIO)
   target_compile_definitions(zoom_bot_recorder PRIVATE ENABLE_RAW_AUDIO=1)
 endif()
 
-set_target_properties(zoom_bot_recorder PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
-)
-
-target_compile_options(zoom_bot_recorder PRIVATE -fPIC)
 target_link_options(zoom_bot_recorder PRIVATE -no-pie)
 
 set(ZOOM_SDK_DIR "/app/zoom_sdk")

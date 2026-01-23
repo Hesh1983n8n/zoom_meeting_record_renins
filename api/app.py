@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -28,13 +30,7 @@ logger = logging.getLogger("zoom-bot-api")
 
 @app.get("/")
 async def root():
-    return {
-        "ok": True,
-        "service": "Zoom Bot API",
-        "endpoints": {"POST /join": "enqueue zoom meeting join job"},
-        "docs": "/docs",
-        "ui": "/ui",
-    }
+    return RedirectResponse(url="/ui")
 
 
 @app.get("/health")
@@ -44,7 +40,8 @@ async def health():
 
 @app.get("/ui", response_class=HTMLResponse)
 def ui():
-    return """
+    return HTMLResponse(
+        content="""
 <!doctype html>
 <html lang="en">
   <head>
@@ -118,7 +115,9 @@ def ui():
     </script>
   </body>
 </html>
-"""
+""",
+        status_code=200,
+    )
 
 
 @app.get("/ui/health")
@@ -128,6 +127,8 @@ async def ui_health():
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 QUEUE_NAME = os.getenv("QUEUE_NAME", "zoom_jobs")
 BOT_DISPLAY_NAME = os.getenv("BOT_DISPLAY_NAME", "Meet.Ai")
+MEETING_SDK_KEY = os.getenv("ZOOM_MEETING_SDK_KEY", "")
+MEETING_SDK_SECRET = os.getenv("ZOOM_MEETING_SDK_SECRET", "")
 OAUTH_CLIENT_ID = os.getenv("ZOOM_OAUTH_CLIENT_ID", "")
 OAUTH_CLIENT_SECRET = os.getenv("ZOOM_OAUTH_CLIENT_SECRET", "")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
@@ -223,7 +224,37 @@ def _decode_jwt_payload(token: str) -> dict:
         raise ValueError("Unable to decode JWT payload") from exc
 
 
+def _base64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("utf-8").rstrip("=")
+
+
+def build_meeting_sdk_signature() -> str:
+    if not MEETING_SDK_KEY or not MEETING_SDK_SECRET:
+        raise ValueError("Missing ZOOM_MEETING_SDK_KEY or ZOOM_MEETING_SDK_SECRET")
+    now = int(time.time())
+    payload = {
+        "appKey": MEETING_SDK_KEY,
+        "iat": now - 30,
+        "exp": now + 60 * 60,
+        "tokenExp": now + 60 * 60,
+    }
+    header = {"alg": "HS256", "typ": "JWT"}
+    header_b64 = _base64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+    payload_b64 = _base64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
+    signature = hmac.new(
+        MEETING_SDK_SECRET.encode("utf-8"),
+        signing_input,
+        hashlib.sha256,
+    ).digest()
+    token = f"{header_b64}.{payload_b64}.{_base64url_encode(signature)}"
+    logger.info("jwt_mode=local payload=%s", payload)
+    return token
+
+
 def fetch_meeting_sdk_signature() -> str:
+    if MEETING_SDK_KEY and MEETING_SDK_SECRET:
+        return build_meeting_sdk_signature()
     if not OAUTH_BASE_URL or not MEETAI_API_KEY:
         raise ValueError("Missing OAUTH_BASE_URL or MEETAI_API_KEY")
     url = f"{OAUTH_BASE_URL.rstrip('/')}/token/meeting-sdk-jwt"

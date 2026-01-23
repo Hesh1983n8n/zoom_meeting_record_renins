@@ -11,22 +11,34 @@ RUN apt-get update \
         ca-certificates \
         xvfb \
         xauth \
+        dbus \
         dbus-x11 \
         libx11-6 \
         libx11-xcb1 \
         libglib2.0-0 \
         libnss3 \
         libasound2 \
+        libpulse0 \
+        libpulse-mainloop-glib0 \
         qtbase5-dev \
         libxcb1 \
+        libxcb-icccm4 \
         libxcb-image0 \
         libxcb-keysyms1 \
+        libxcb-randr0 \
+        libxcb-render0 \
+        libxcb-render-util0 \
+        libxcb-shm0 \
         libxcb-xtest0 \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        qtbase5-dev \
+        libxcb-util1 \
+        libxcb-xinerama0 \
+        libxfixes3 \
+        libxi6 \
+        libxkbcommon-x11-0 \
+        libxrandr2 \
+        libxrender1 \
+        libxtst6 \
+        pulseaudio \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt

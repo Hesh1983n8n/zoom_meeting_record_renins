@@ -8,6 +8,40 @@ from typing import Any, Dict
 import requests
 
 
+def ensure_dbus_session(env: Dict[str, str]) -> None:
+    if env.get("DBUS_SESSION_BUS_ADDRESS"):
+        return
+    try:
+        result = subprocess.run(
+            ["dbus-daemon", "--session", "--fork", "--print-address=1", "--print-pid=1"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        if lines:
+            env["DBUS_SESSION_BUS_ADDRESS"] = lines[0]
+            logging.info("dbus_session_started address=%s", lines[0])
+    except Exception:
+        logging.exception("dbus_session_start_failed")
+
+
+def ensure_pulseaudio(env: Dict[str, str]) -> None:
+    runtime_dir = env.get("XDG_RUNTIME_DIR", "/tmp/xdg")
+    Path(runtime_dir).mkdir(parents=True, exist_ok=True)
+    env["XDG_RUNTIME_DIR"] = runtime_dir
+    try:
+        subprocess.run(
+            ["pulseaudio", "--start", "--exit-idle-time=-1", "--log-level=error"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logging.info("pulseaudio_started")
+    except Exception:
+        logging.exception("pulseaudio_start_failed")
+
+
 def fetch_meeting_sdk_signature() -> str:
     oauth_base_url = os.getenv("OAUTH_BASE_URL", "").rstrip("/")
     api_key = os.getenv("MEETAI_API_KEY", "")
@@ -61,6 +95,8 @@ def process_job(job: Dict[str, Any]) -> None:
     env = os.environ.copy()
     env["DISPLAY"] = env.get("DISPLAY", ":99")
     env["HOME"] = "/tmp/meetai_home"
+    ensure_dbus_session(env)
+    ensure_pulseaudio(env)
 
     subprocess.Popen(
         ["Xvfb", env["DISPLAY"], "-screen", "0", "1280x720x24"],

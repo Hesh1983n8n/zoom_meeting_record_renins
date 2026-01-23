@@ -78,6 +78,41 @@ const char *MeetingFailCodeToString(int code) {
   }
 }
 
+const char *MeetingStatusToString(MeetingStatus status) {
+  switch (status) {
+    case MEETING_STATUS_IDLE:
+      return "MEETING_STATUS_IDLE";
+    case MEETING_STATUS_CONNECTING:
+      return "MEETING_STATUS_CONNECTING";
+    case MEETING_STATUS_WAITINGFORHOST:
+      return "MEETING_STATUS_WAITINGFORHOST";
+    case MEETING_STATUS_INMEETING:
+      return "MEETING_STATUS_INMEETING";
+    case MEETING_STATUS_DISCONNECTING:
+      return "MEETING_STATUS_DISCONNECTING";
+    case MEETING_STATUS_RECONNECTING:
+      return "MEETING_STATUS_RECONNECTING";
+    case MEETING_STATUS_FAILED:
+      return "MEETING_STATUS_FAILED";
+    case MEETING_STATUS_ENDED:
+      return "MEETING_STATUS_ENDED";
+    case MEETING_STATUS_IN_WAITING_ROOM:
+      return "MEETING_STATUS_IN_WAITING_ROOM";
+    case MEETING_STATUS_WEBINAR_PROMOTE:
+      return "MEETING_STATUS_WEBINAR_PROMOTE";
+    case MEETING_STATUS_WEBINAR_DEPROMOTE:
+      return "MEETING_STATUS_WEBINAR_DEPROMOTE";
+    case MEETING_STATUS_JOIN_BREAKOUT_ROOM:
+      return "MEETING_STATUS_JOIN_BREAKOUT_ROOM";
+    case MEETING_STATUS_LEAVE_BREAKOUT_ROOM:
+      return "MEETING_STATUS_LEAVE_BREAKOUT_ROOM";
+    case MEETING_STATUS_WAITING_EXTERNAL_SESSION_KEY:
+      return "MEETING_STATUS_WAITING_EXTERNAL_SESSION_KEY";
+    default:
+      return "MEETING_STATUS_(other/unknown)";
+  }
+}
+
 void LogSdkError(const std::string &label, SDKError code) {
   std::cout << label << " code=" << static_cast<int>(code)
             << " name=" << SDKErrorToString(code) << std::endl;
@@ -184,13 +219,12 @@ class MeetingEventHandler : public IMeetingServiceEvent {
   void onMeetingStatusChanged(MeetingStatus status, int iResult) override {
     last_status.store(static_cast<int>(status));
     last_result.store(iResult);
-    std::cout << "[recorder] meeting_status status=" << static_cast<int>(status)
-              << " result=" << iResult;
-    if (status == MEETING_STATUS_FAILED || status == MEETING_STATUS_ENDED) {
-      std::cout << " fail_name=" << MeetingFailCodeToString(iResult);
-      if (iResult == MEETING_FAIL_UNABLE_TO_JOIN_EXTERNAL_MEETING) {
-        std::cout << " hint=publish_meeting_sdk_app_required";
-      }
+    std::cout << "[recorder] meeting_status status=" << MeetingStatusToString(status)
+              << " (" << static_cast<int>(status) << ")"
+              << " result=" << MeetingFailCodeToString(iResult)
+              << " (" << iResult << ")";
+    if (status == MEETING_STATUS_FAILED && iResult == MEETING_FAIL_UNABLE_TO_JOIN_EXTERNAL_MEETING) {
+      std::cout << " hint=\"external meeting blocked, publish app or use meeting from same account\"";
     }
     std::cout << std::endl;
   }
@@ -440,10 +474,6 @@ int main(int argc, char **argv) {
     audio_helper = ZOOMSDK::GetAudioRawdataHelper();
     if (!audio_helper) {
       std::cerr << "[recorder] subscribe_audio SKIPPED helper_unavailable" << std::endl;
-    } else {
-      audio_delegate = std::make_unique<AudioRawDelegate>(args.out_dir);
-      SDKError sub_ret = audio_helper->subscribe(audio_delegate.get());
-      LogSdkError("[recorder] subscribe_audio", sub_ret);
     }
   }
 #endif
@@ -451,6 +481,7 @@ int main(int argc, char **argv) {
   auto meeting_start = std::chrono::steady_clock::now();
   auto last_log = meeting_start;
   bool in_meeting = false;
+  bool subscribed = false;
   while (true) {
     app.processEvents(QEventLoop::AllEvents, 50);
 
@@ -462,6 +493,14 @@ int main(int argc, char **argv) {
         std::cout << "[recorder] in_meeting" << std::endl;
         in_meeting = true;
       }
+#if ZOOMSDK_HAS_RAW_AUDIO && defined(ENABLE_RAW_AUDIO)
+      if (!subscribed && audio_helper && !connect_only) {
+        audio_delegate = std::make_unique<AudioRawDelegate>(args.out_dir);
+        SDKError sub_ret = audio_helper->subscribe(audio_delegate.get());
+        LogSdkError("[recorder] subscribe_audio", sub_ret);
+        subscribed = (sub_ret == SDKERR_SUCCESS);
+      }
+#endif
     } else if (status_value == static_cast<int>(MEETING_STATUS_IN_WAITING_ROOM)) {
       std::cout << "[recorder] waiting_room (host must admit Meet.Ai)" << std::endl;
     } else if (status_value == static_cast<int>(MEETING_STATUS_WAITINGFORHOST)) {

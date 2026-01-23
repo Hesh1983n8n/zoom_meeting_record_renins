@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 SDK_DIR="${1:-/opt/sdk}"
+SDK="${SDK_DIR}"
+echo "SDK root: ${SDK}"
+ls -la "${SDK}"
+ls -la "${SDK}/qt_libs" || true
+find "${SDK}" -maxdepth 2 -name "*.so*" -print
 
 required_paths=(
-  "$SDK_DIR/h"
-  "$SDK_DIR/json"
-  "$SDK_DIR/qt_libs"
-  "$SDK_DIR/libmeetingsdk.so"
+  "$SDK/h"
+  "$SDK/json"
+  "$SDK/qt_libs"
+  "$SDK/libmeetingsdk.so"
 )
 
 missing=()
@@ -24,8 +29,4 @@ if [[ ${#missing[@]} -gt 0 ]]; then
   exit 1
 fi
 
-if [[ ! -e "$SDK_DIR/libcmm.so" ]]; then
-  echo "Warning: optional libcmm.so not found at $SDK_DIR/libcmm.so" >&2
-fi
-
-echo "SDK layout OK at $SDK_DIR"
+echo "SDK layout OK at $SDK"

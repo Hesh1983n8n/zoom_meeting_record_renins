@@ -4,10 +4,12 @@ project(zoom_bot_recorder LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(SDK_DIR "/opt/sdk")
+if(NOT DEFINED SDK_ROOT)
+  set(SDK_ROOT "/opt/sdk")
+endif()
 
 include_directories(
-  ${SDK_DIR}/include
+  ${SDK_ROOT}/h
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
@@ -24,13 +26,9 @@ add_executable(zoom_bot
   src/util_sanitize.cpp
 )
 
-target_link_directories(zoom_bot PRIVATE ${SDK_DIR}/lib)
+add_library(meetingsdk SHARED IMPORTED)
+set_target_properties(meetingsdk PROPERTIES IMPORTED_LOCATION "${SDK_ROOT}/libmeetingsdk.so")
 
-target_link_libraries(zoom_bot
-  meetingsdk
-  meeting_service
-  zoom_rtc
-  pthread
-)
+target_link_libraries(zoom_bot PRIVATE meetingsdk pthread dl)
 
 install(TARGETS zoom_bot RUNTIME DESTINATION /usr/local/bin)

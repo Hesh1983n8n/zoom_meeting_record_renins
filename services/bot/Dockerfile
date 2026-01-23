@@ -10,13 +10,14 @@ COPY scripts/validate_sdk_layout.sh /app/scripts/validate_sdk_layout.sh
 COPY third_party/sdk/zoom-meeting-sdk-linux_x86_64-6.7.2.7020/ /opt/sdk/
 
 RUN sed -i 's/\r$//' /app/scripts/validate_sdk_layout.sh \
-  && chmod +x /app/scripts/validate_sdk_layout.sh \
-  && /app/scripts/validate_sdk_layout.sh /opt/sdk
+  && chmod +x /app/scripts/validate_sdk_layout.sh
+
+RUN /app/scripts/validate_sdk_layout.sh /opt/sdk
 
 COPY CMakeLists.txt /app/CMakeLists.txt
 COPY src/ /app/src/
 
-RUN cmake -S /app -B /app/build \
+RUN cmake -S /app -B /app/build -DSDK_ROOT=/opt/sdk \
   && cmake --build /app/build -j$(nproc)
 
 FROM ubuntu:22.04

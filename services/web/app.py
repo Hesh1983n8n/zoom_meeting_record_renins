@@ -165,6 +165,11 @@ def start():
         status_code = 500 if auth_result["error"] == "AUTH_MISCONFIGURED" else 502
         return jsonify(auth_result), status_code
 
+    bot_url = f"{BOT_BASE_URL}/api/v1/join"
+    print("[start] calling bot join:", bot_url)
+    print("[start] meeting_id:", meeting_number, "has_passcode:", bool(pwd))
+    print("[start] sdk_jwt_prefix:", token[:12] if token else "")
+
     payload = {
         "meeting_url": meeting_url,
         "passcode": pwd,
@@ -173,10 +178,7 @@ def start():
     }
 
     try:
-        bot_url = f"{BOT_BASE_URL}/api/v1/join"
         bot_resp = requests.post(bot_url, json=payload, timeout=10)
-        bot_status = bot_resp.status_code
-        bot_resp.raise_for_status()
     except requests.RequestException as exc:
         snippet = ""
         if "bot_resp" in locals() and getattr(bot_resp, "text", None):
@@ -187,14 +189,36 @@ def start():
                     "ok": False,
                     "error": "BOT_JOIN_ERROR",
                     "bot_url": bot_url,
-                    "status_code": bot_status if "bot_status" in locals() else None,
+                    "status_code": None,
                     "details": str(exc),
                     "response_snippet": snippet,
                 }
             ),
             502,
         )
-    return jsonify({"ok": True})
+
+    print("[start] bot join status:", bot_resp.status_code)
+    print("[start] bot join body:", bot_resp.text[:300])
+    if not (200 <= bot_resp.status_code < 300):
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "BOT_JOIN_ERROR",
+                    "status_code": bot_resp.status_code,
+                    "response_snippet": mask_jwts(bot_resp.text[:300]),
+                    "bot_url": bot_url,
+                }
+            ),
+            502,
+        )
+    return jsonify(
+        {
+            "ok": True,
+            "bot_status_code": bot_resp.status_code,
+            "bot_response_snippet": mask_jwts(bot_resp.text[:200]),
+        }
+    )
 
 
 @app.route("/api/test-auth")

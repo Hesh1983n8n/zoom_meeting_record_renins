@@ -4,6 +4,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <cctype>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -77,6 +78,26 @@ std::string StateToString(RecorderState state) {
       return "unknown";
   }
 }
+
+std::string ExtractMeetingId(const std::string& meeting_url) {
+  std::string::size_type pos = meeting_url.find("/j/");
+  if (pos == std::string::npos) {
+    return "";
+  }
+  pos += 3;
+  std::string::size_type end = pos;
+  while (end < meeting_url.size() && std::isdigit(static_cast<unsigned char>(meeting_url[end]))) {
+    ++end;
+  }
+  return meeting_url.substr(pos, end - pos);
+}
+
+std::string TokenPrefix(const std::string& token, size_t length = 12) {
+  if (token.size() <= length) {
+    return token;
+  }
+  return token.substr(0, length);
+}
 }
 
 std::atomic<bool>* g_running = nullptr;
@@ -124,12 +145,27 @@ int main() {
       if (!sdk_auth_token) {
         sdk_auth_token = JsonGetString(req.body, "sdk_jwt");
       }
+      if (!sdk_auth_token) {
+        sdk_auth_token = JsonGetString(req.body, "signature");
+      }
       auto recording_token = JsonGetString(req.body, "recording_token");
       auto passcode = JsonGetString(req.body, "passcode");
 
       if (!meeting_url || !display_name || !sdk_auth_token) {
+        if (meeting_url && display_name && !sdk_auth_token) {
+          return HttpResponse{400, "{\"ok\":false,\"error\":\"MISSING_SDK_JWT\"}", "application/json"};
+        }
         return HttpResponse{400, "{\"error\":\"missing_fields\"}", "application/json"};
       }
+
+      std::string meeting_id = ExtractMeetingId(*meeting_url);
+      std::cout << "[join] request received" << std::endl;
+      std::cout << "[join] meeting_id=" << meeting_id
+                << " pwd_present=" << (passcode ? "true" : "false")
+                << " display_name=" << *display_name
+                << " sdk_jwt_prefix=" << TokenPrefix(*sdk_auth_token) << std::endl;
+
+      return HttpResponse{200, "{\"ok\":true,\"msg\":\"join received\"}", "application/json"};
       join_request.meeting_url = *meeting_url;
       join_request.display_name = *display_name;
       join_request.sdk_auth_token = *sdk_auth_token;

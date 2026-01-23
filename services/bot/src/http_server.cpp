@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -76,6 +77,9 @@ void HttpServer::Stop() {
 }
 
 HttpResponse HttpServer::HandleRequest(const HttpRequest& request) {
+  if (request.method == "POST" && request.path == "/api/v1/join") {
+    std::printf("[join] request received\n");
+  }
   auto it = routes_.find(request.method + " " + request.path);
   if (it == routes_.end()) {
     return {404, "{\"error\":\"not_found\"}", "application/json"};

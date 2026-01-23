@@ -3,30 +3,29 @@ set -euo pipefail
 SDK_DIR="${1:-/opt/sdk}"
 
 required_paths=(
-  "$SDK_DIR/include"
-  "$SDK_DIR/lib"
-  "$SDK_DIR/translation.json"
-  "$SDK_DIR/zoomus.conf"
+  "$SDK_DIR/h"
+  "$SDK_DIR/json"
+  "$SDK_DIR/qt_libs"
+  "$SDK_DIR/libmeetingsdk.so"
 )
 
-required_sos=(
-  "libmeetingsdk.so"
-  "libmeeting_service.so"
-  "libzoom_rtc.so"
-)
-
+missing=()
 for p in "${required_paths[@]}"; do
   if [[ ! -e "$p" ]]; then
-    echo "Missing SDK path: $p" >&2
-    exit 1
+    missing+=("$p")
   fi
 done
 
-for so in "${required_sos[@]}"; do
-  if ! ls "$SDK_DIR/lib/$so" >/dev/null 2>&1; then
-    echo "Missing SDK lib: $SDK_DIR/lib/$so" >&2
-    exit 1
-  fi
-done
+if [[ ${#missing[@]} -gt 0 ]]; then
+  echo "SDK layout check failed. Missing required paths:" >&2
+  for p in "${missing[@]}"; do
+    echo " - $p" >&2
+  done
+  exit 1
+fi
+
+if [[ ! -e "$SDK_DIR/libcmm.so" ]]; then
+  echo "Warning: optional libcmm.so not found at $SDK_DIR/libcmm.so" >&2
+fi
 
 echo "SDK layout OK at $SDK_DIR"

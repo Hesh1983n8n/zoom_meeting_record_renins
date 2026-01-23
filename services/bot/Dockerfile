@@ -9,7 +9,9 @@ WORKDIR /app
 COPY scripts/validate_sdk_layout.sh /app/scripts/validate_sdk_layout.sh
 COPY third_party/sdk/zoom-meeting-sdk-linux_x86_64-6.7.2.7020/ /opt/sdk/
 
-RUN /app/scripts/validate_sdk_layout.sh /opt/sdk
+RUN sed -i 's/\r$//' /app/scripts/validate_sdk_layout.sh \
+  && chmod +x /app/scripts/validate_sdk_layout.sh \
+  && /app/scripts/validate_sdk_layout.sh /opt/sdk
 
 COPY CMakeLists.txt /app/CMakeLists.txt
 COPY src/ /app/src/
@@ -26,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=build /opt/sdk /opt/sdk
 COPY --from=build /app/build/zoom_bot /usr/local/bin/zoom_bot
 
-ENV LD_LIBRARY_PATH=/opt/sdk/lib
+ENV LD_LIBRARY_PATH=/opt/sdk:/opt/sdk/qt_libs
 ENV RECORDS_DIR=/records
 ENV BOT_PORT=3667
 

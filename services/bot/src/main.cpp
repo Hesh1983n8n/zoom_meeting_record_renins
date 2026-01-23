@@ -91,16 +91,12 @@ int main() {
     ZoomClient zoom_client(recorder);
     HttpServer server;
 
-    std::string sdk_error;
-    bool sdk_ok = zoom_client.ProbeSdkLoaded(&sdk_error);
-    if (sdk_ok) {
+    ProbeResult probe = zoom_client.ProbeSdkLoaded();
+    if (probe.ok) {
       std::cout << "SDK dlopen: OK" << std::endl;
     } else {
-      std::cout << "SDK dlopen: FAIL" << std::endl;
-      if (!sdk_error.empty()) {
-        std::cout << "SDK dlopen error: " << sdk_error << std::endl;
-      }
-      zoom_client.SetSdkError(sdk_error.empty() ? "sdk_dlopen_failed" : sdk_error);
+      std::cout << "SDK dlopen: FAIL: " << probe.error << std::endl;
+      zoom_client.SetSdkError(probe.error.empty() ? "sdk_dlopen_failed" : probe.error);
     }
 
     server.AddRoute("POST", "/api/v1/join", [&](const HttpRequest& req) {
@@ -142,6 +138,11 @@ int main() {
                          std::to_string(status.participants) + ",\"session_id\":\"" + status.session_id + "\"";
       if (status.error) {
         body += ",\"error\":\"" + *status.error + "\"";
+      }
+      body += ",\"sdk_loaded\":" + std::string(zoom_client.SdkLoaded() ? "true" : "false");
+      std::string sdk_error = zoom_client.SdkError();
+      if (!sdk_error.empty()) {
+        body += ",\"sdk_error\":\"" + sdk_error + "\"";
       }
       body += "}";
       return HttpResponse{200, body, "application/json"};

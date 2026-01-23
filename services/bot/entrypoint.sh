@@ -37,4 +37,7 @@ else
 fi
 
 echo "[entrypoint] starting zoom_bot"
-exec /usr/local/bin/zoom_bot
+/usr/local/bin/zoom_bot
+rc=$?
+echo "[entrypoint] zoom_bot exited with code $rc"
+exit $rc

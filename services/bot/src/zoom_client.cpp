@@ -12,10 +12,10 @@ bool ZoomClient::JoinMeeting(const JoinRequest& request) {
   status_.error.reset();
 
   if (!sdk_handle_) {
-    std::string error_message;
-    if (!ProbeSdkLoaded(&error_message)) {
+    ProbeResult probe = ProbeSdkLoaded();
+    if (!probe.ok) {
       status_.state = RecorderState::Error;
-      status_.error = error_message;
+      status_.error = probe.error;
       return false;
     }
   }
@@ -49,20 +49,23 @@ RecorderStatus ZoomClient::Status() const {
   return current;
 }
 
-bool ZoomClient::ProbeSdkLoaded(std::string* error_message) {
+ProbeResult ZoomClient::ProbeSdkLoaded() {
   void* handle = dlopen("libmeetingsdk.so", RTLD_NOW | RTLD_GLOBAL);
   if (!handle) {
-    if (error_message) {
-      const char* err = dlerror();
-      *error_message = err ? err : "dlopen failed";
-    }
-    return false;
+    const char* err = dlerror();
+    sdk_loaded_ = false;
+    sdk_error_ = err ? err : "unknown dlopen error";
+    return {false, sdk_error_};
   }
   sdk_handle_ = handle;
-  return true;
+  sdk_loaded_ = true;
+  sdk_error_.clear();
+  return {true, ""};
 }
 
 void ZoomClient::SetSdkError(const std::string& error) {
   status_.state = RecorderState::Error;
   status_.error = error;
+  sdk_loaded_ = false;
+  sdk_error_ = error;
 }

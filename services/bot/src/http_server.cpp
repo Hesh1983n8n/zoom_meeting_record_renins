@@ -32,8 +32,35 @@ bool HttpServer::Start(int port) {
   if (running_) {
     return false;
   }
+  server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+  if (server_fd_ < 0) {
+    last_error_code_ = errno;
+    return false;
+  }
+  int opt = 1;
+  setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = INADDR_ANY;
+  addr.sin_port = htons(static_cast<uint16_t>(port));
+
+  if (bind(server_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+    last_error_code_ = errno;
+    close(server_fd_);
+    server_fd_ = -1;
+    return false;
+  }
+
+  if (listen(server_fd_, 8) < 0) {
+    last_error_code_ = errno;
+    close(server_fd_);
+    server_fd_ = -1;
+    return false;
+  }
+
   running_ = true;
-  server_thread_ = std::thread(&HttpServer::RunLoop, this, port);
+  server_thread_ = std::thread(&HttpServer::RunLoop, this);
   return true;
 }
 
@@ -41,6 +68,10 @@ void HttpServer::Stop() {
   running_ = false;
   if (server_thread_.joinable()) {
     server_thread_.join();
+  }
+  if (server_fd_ >= 0) {
+    close(server_fd_);
+    server_fd_ = -1;
   }
 }
 
@@ -52,31 +83,9 @@ HttpResponse HttpServer::HandleRequest(const HttpRequest& request) {
   return it->second(request);
 }
 
-void HttpServer::RunLoop(int port) {
-  int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (server_fd < 0) {
-    return;
-  }
-  int opt = 1;
-  setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-  sockaddr_in addr{};
-  addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = INADDR_ANY;
-  addr.sin_port = htons(static_cast<uint16_t>(port));
-
-  if (bind(server_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
-    close(server_fd);
-    return;
-  }
-
-  if (listen(server_fd, 8) < 0) {
-    close(server_fd);
-    return;
-  }
-
+void HttpServer::RunLoop() {
   while (running_) {
-    int client_fd = accept(server_fd, nullptr, nullptr);
+    int client_fd = accept(server_fd_, nullptr, nullptr);
     if (client_fd < 0) {
       continue;
     }
@@ -131,6 +140,4 @@ void HttpServer::RunLoop(int port) {
     send(client_fd, response_str.data(), response_str.size(), 0);
     close(client_fd);
   }
-
-  close(server_fd);
 }

@@ -23,11 +23,14 @@ RUN cmake -S /app -B /app/build -DSDK_ROOT=/opt/sdk \
 FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl \
+    ca-certificates curl procps \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/sdk /opt/sdk
 COPY --from=build /app/build/zoom_bot /usr/local/bin/zoom_bot
+COPY entrypoint.sh /entrypoint.sh
+
+RUN chmod +x /entrypoint.sh
 
 ENV LD_LIBRARY_PATH=/opt/sdk:/opt/sdk/qt_libs
 ENV RECORDS_DIR=/records
@@ -35,4 +38,4 @@ ENV BOT_PORT=3667
 
 EXPOSE 3667
 
-CMD ["/usr/local/bin/zoom_bot"]
+ENTRYPOINT ["/entrypoint.sh"]

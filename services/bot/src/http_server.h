@@ -26,12 +26,15 @@ class HttpServer {
   void AddRoute(const std::string& method, const std::string& path, HttpHandler handler);
   bool Start(int port);
   void Stop();
+  int LastErrorCode() const { return last_error_code_; }
 
  private:
   HttpResponse HandleRequest(const HttpRequest& request);
-  void RunLoop(int port);
+  void RunLoop();
 
   std::map<std::string, HttpHandler> routes_;
   bool running_ = false;
   std::thread server_thread_;
+  int server_fd_ = -1;
+  int last_error_code_ = 0;
 };

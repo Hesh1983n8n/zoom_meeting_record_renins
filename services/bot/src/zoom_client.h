@@ -29,6 +29,12 @@ struct ProbeResult {
 class ZoomClient {
  public:
   explicit ZoomClient(Recorder& recorder);
+  ~ZoomClient();
+
+  ZoomClient(const ZoomClient&) = delete;
+  ZoomClient& operator=(const ZoomClient&) = delete;
+  ZoomClient(ZoomClient&&) noexcept;
+  ZoomClient& operator=(ZoomClient&&) noexcept;
 
   bool EnsureSdkLoaded(std::string& error_message);
   bool InitSdkOnce(std::string& error_message, int& code);
@@ -47,8 +53,8 @@ class ZoomClient {
   std::string SdkError() const { return sdk_error_; }
 
  private:
-  class AuthEventHandler;
-  class MeetingEventHandler;
+  struct AuthEventHandler;
+  struct MeetingEventHandler;
 
   void SetState(RecorderState state, const std::optional<std::string>& error = std::nullopt);
   Recorder& recorder_;

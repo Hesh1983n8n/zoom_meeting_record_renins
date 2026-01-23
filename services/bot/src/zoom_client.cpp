@@ -89,6 +89,10 @@ ZoomClient::ZoomClient(Recorder& recorder) : recorder_(recorder) {
   status_.state = RecorderState::Idle;
 }
 
+ZoomClient::~ZoomClient() = default;
+ZoomClient::ZoomClient(ZoomClient&&) noexcept = default;
+ZoomClient& ZoomClient::operator=(ZoomClient&&) noexcept = default;
+
 void ZoomClient::SetState(RecorderState state, const std::optional<std::string>& error) {
   std::lock_guard<std::mutex> lock(mutex_);
   status_.state = state;

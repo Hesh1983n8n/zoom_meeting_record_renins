@@ -7,6 +7,44 @@ ZoomClient::ZoomClient(Recorder& recorder) : recorder_(recorder) {
   status_.state = RecorderState::Idle;
 }
 
+bool ZoomClient::EnsureSdkLoaded(std::string& error_message) {
+  if (sdk_loaded_) {
+    return true;
+  }
+  ProbeResult result = ProbeSdkLoaded();
+  if (!result.ok) {
+    error_message = result.error;
+    SetSdkError(result.error);
+    return false;
+  }
+  sdk_loaded_ = true;
+  return true;
+}
+
+bool ZoomClient::SdkAuth(const std::string& jwt, std::string& error_message, int& code) {
+  code = -1;
+  if (jwt.empty()) {
+    error_message = "sdk_jwt empty";
+    return false;
+  }
+  error_message = "SDKAuth not implemented";
+  return false;
+}
+
+bool ZoomClient::JoinMeeting(const std::string& meeting_id,
+                             const std::string& passcode,
+                             const std::string& display_name,
+                             std::string& error_message,
+                             int& code) {
+  code = -1;
+  if (meeting_id.empty() || display_name.empty()) {
+    error_message = "meeting_id or display_name empty";
+    return false;
+  }
+  error_message = "JoinMeeting not implemented";
+  return false;
+}
+
 bool ZoomClient::JoinMeeting(const JoinRequest& request) {
   status_.state = RecorderState::Joining;
   status_.error.reset();

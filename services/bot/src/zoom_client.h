@@ -22,6 +22,13 @@ class ZoomClient {
  public:
   explicit ZoomClient(Recorder& recorder);
 
+  bool EnsureSdkLoaded(std::string& error_message);
+  bool SdkAuth(const std::string& jwt, std::string& error_message, int& code);
+  bool JoinMeeting(const std::string& meeting_id,
+                   const std::string& passcode,
+                   const std::string& display_name,
+                   std::string& error_message,
+                   int& code);
   bool JoinMeeting(const JoinRequest& request);
   void LeaveMeeting();
   RecorderStatus Status() const;

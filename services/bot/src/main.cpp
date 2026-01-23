@@ -177,22 +177,30 @@ int main() {
                 << " display_name=" << *display_name
                 << " sdk_jwt_prefix=" << TokenPrefix(cleaned_token) << std::endl;
 
-      return HttpResponse{200, "{\"ok\":true,\"msg\":\"join received\"}", "application/json"};
-      join_request.meeting_url = *meeting_url;
-      join_request.display_name = *display_name;
-      join_request.sdk_auth_token = *sdk_auth_token;
-      if (recording_token) {
-        join_request.recording_token = *recording_token;
+      std::string error;
+      int code = 0;
+      std::cout << "[join] ensure_sdk_loaded" << std::endl;
+      if (!zoom_client.EnsureSdkLoaded(error)) {
+        std::cout << "[join] SDK load failed: " << error << std::endl;
+        return HttpResponse{500, "{\"ok\":false,\"error\":\"SDK_LOAD_FAILED\"}", "application/json"};
       }
-      if (passcode) {
-        join_request.passcode = *passcode;
+      std::cout << "[join] sdk_auth" << std::endl;
+      if (!zoom_client.SdkAuth(cleaned_token, error, code)) {
+        std::cout << "[join] SDKAuth failed code=" << code << " error=" << error << std::endl;
+        return HttpResponse{500,
+                            "{\"ok\":false,\"error\":\"SDK_AUTH_FAILED\",\"code\":" + std::to_string(code) + "}",
+                            "application/json"};
       }
-
-      bool ok = zoom_client.JoinMeeting(join_request);
-      if (!ok) {
-        return HttpResponse{500, "{\"error\":\"join_failed\"}", "application/json"};
+      std::cout << "[join] join_meeting" << std::endl;
+      if (!zoom_client.JoinMeeting(meeting_id, passcode.value_or(""), *display_name, error, code)) {
+        std::cout << "[join] JoinMeeting failed code=" << code << " error=" << error << std::endl;
+        return HttpResponse{
+            500, "{\"ok\":false,\"error\":\"JOIN_FAILED\",\"code\":" + std::to_string(code) + "}", "application/json"};
       }
-      return HttpResponse{200, "{\"status\":\"ok\"}", "application/json"};
+      return HttpResponse{200,
+                          "{\"ok\":true,\"state\":\"joining\",\"meeting_id\":\"" + meeting_id + "\"}",
+                          "application/json"};
+      (void)join_request;
     });
 
     server.AddRoute("POST", "/api/v1/leave", [&](const HttpRequest&) {

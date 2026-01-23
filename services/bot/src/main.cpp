@@ -98,6 +98,17 @@ std::string TokenPrefix(const std::string& token, size_t length = 12) {
   }
   return token.substr(0, length);
 }
+
+std::string StripWhitespace(const std::string& value) {
+  std::string out;
+  out.reserve(value.size());
+  for (char ch : value) {
+    if (!std::isspace(static_cast<unsigned char>(ch))) {
+      out.push_back(ch);
+    }
+  }
+  return out;
+}
 }
 
 std::atomic<bool>* g_running = nullptr;
@@ -158,12 +169,13 @@ int main() {
         return HttpResponse{400, "{\"error\":\"missing_fields\"}", "application/json"};
       }
 
+      std::string cleaned_token = StripWhitespace(*sdk_auth_token);
       std::string meeting_id = ExtractMeetingId(*meeting_url);
       std::cout << "[join] request received" << std::endl;
       std::cout << "[join] meeting_id=" << meeting_id
                 << " pwd_present=" << (passcode ? "true" : "false")
                 << " display_name=" << *display_name
-                << " sdk_jwt_prefix=" << TokenPrefix(*sdk_auth_token) << std::endl;
+                << " sdk_jwt_prefix=" << TokenPrefix(cleaned_token) << std::endl;
 
       return HttpResponse{200, "{\"ok\":true,\"msg\":\"join received\"}", "application/json"};
       join_request.meeting_url = *meeting_url;

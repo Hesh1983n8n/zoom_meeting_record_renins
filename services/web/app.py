@@ -115,17 +115,28 @@ def fetch_meetai_token():
 
     response_type = "object"
     token = None
+    token_source = None
     if isinstance(data, str):
         response_type = "string"
         token = data
     elif isinstance(data, dict):
-        token = (
-            data.get("signature")
-            or data.get("meeting_sdk_jwt")
-            or data.get("sdk_jwt")
-            or data.get("token")
-            or data.get("jwt")
-        )
+        token = data.get("signature")
+        token_source = "signature" if token else None
+        if not token:
+            token = data.get("token")
+            token_source = "token" if token else None
+        if not token:
+            token = data.get("tocken")
+            token_source = "tocken" if token else None
+        if not token:
+            token = data.get("sdk_jwt")
+            token_source = "sdk_jwt" if token else None
+        if not token:
+            token = data.get("jwt")
+            token_source = "jwt" if token else None
+
+    if token:
+        token = re.sub(r"\s+", "", token)
 
     if not token:
         snippet = mask_jwts(resp.text[:300]) if resp.text else ""
@@ -141,6 +152,7 @@ def fetch_meetai_token():
         "response": data,
         "auth_url": auth_url,
         "response_type": response_type,
+        "token_source": token_source,
     }
 
 
@@ -242,6 +254,7 @@ def test_auth():
             "response_type": response_type,
             "response_keys": response_keys,
             "app_key": app_key,
+            "token_source": auth_result.get("token_source"),
         }
     )
 

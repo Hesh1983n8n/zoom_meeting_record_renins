@@ -15,11 +15,12 @@ services:
       - QUEUE_NAME=${QUEUE_NAME}
       - BOT_DISPLAY_NAME=${BOT_DISPLAY_NAME}
       - ZOOM_MEETING_SDK_KEY=${ZOOM_MEETING_SDK_KEY}
-      - ZOOM_MEETING_SDK_SECRET=${ZOOM_MEETING_SDK_SECRET}
       - ZOOM_OAUTH_CLIENT_ID=${ZOOM_OAUTH_CLIENT_ID}
       - ZOOM_OAUTH_CLIENT_SECRET=${ZOOM_OAUTH_CLIENT_SECRET}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
       - OAUTH_REDIRECT_PATH=${OAUTH_REDIRECT_PATH}
+      - OAUTH_BASE_URL=${OAUTH_BASE_URL}
+      - MEETAI_API_KEY=${MEETAI_API_KEY}
     ports:
       - "3667:3667"
     depends_on:
@@ -34,22 +35,9 @@ services:
       - QUEUE_NAME=${QUEUE_NAME}
       - BOT_DISPLAY_NAME=${BOT_DISPLAY_NAME}
       - DATA_DIR=${DATA_DIR}
+      - OAUTH_BASE_URL=${OAUTH_BASE_URL}
+      - MEETAI_API_KEY=${MEETAI_API_KEY}
     volumes:
       - ./data:/data
     depends_on:
       - redis
-
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: zoom-recorder-ngrok
-    depends_on:
-      - zoom-recorder-api
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-      - NGROK_DOMAIN=${NGROK_DOMAIN}
-    command:
-      - http
-      - --domain=${NGROK_DOMAIN}
-      - zoom-recorder-api:3667
-    ports:
-      - "4040:4040"

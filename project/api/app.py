@@ -6,7 +6,6 @@ import secrets
 import time
 from typing import Optional
 
-import jwt
 import redis
 import requests
 from fastapi import FastAPI, HTTPException
@@ -129,12 +128,12 @@ async def ui_health():
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 QUEUE_NAME = os.getenv("QUEUE_NAME", "zoom_jobs")
 BOT_DISPLAY_NAME = os.getenv("BOT_DISPLAY_NAME", "Meet.Ai")
-SDK_KEY = os.getenv("ZOOM_MEETING_SDK_KEY", "")
-SDK_SECRET = os.getenv("ZOOM_MEETING_SDK_SECRET", "")
 OAUTH_CLIENT_ID = os.getenv("ZOOM_OAUTH_CLIENT_ID", "")
 OAUTH_CLIENT_SECRET = os.getenv("ZOOM_OAUTH_CLIENT_SECRET", "")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 OAUTH_REDIRECT_PATH = os.getenv("OAUTH_REDIRECT_PATH", "/oauth/callback")
+OAUTH_BASE_URL = os.getenv("OAUTH_BASE_URL", "")
+MEETAI_API_KEY = os.getenv("MEETAI_API_KEY", "")
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
@@ -214,15 +213,6 @@ async def oauth_callback(code: Optional[str] = None, state: Optional[str] = None
     return {"ok": True, "stored": True, "token_type": token_payload.get("token_type")}
 
 
-def _build_sdk_auth_payload(now: int) -> dict:
-    return {
-        "appKey": SDK_KEY,
-        "iat": now - 30,
-        "exp": now + 60 * 60,
-        "tokenExp": now + 60 * 60,
-    }
-
-
 def _decode_jwt_payload(token: str) -> dict:
     try:
         payload_b64 = token.split(".")[1]
@@ -233,39 +223,26 @@ def _decode_jwt_payload(token: str) -> dict:
         raise ValueError("Unable to decode JWT payload") from exc
 
 
-def _log_payload_times(payload: dict) -> None:
-    now = int(time.time())
-    iat = payload.get("iat")
-    exp = payload.get("exp")
-    token_exp = payload.get("tokenExp")
-    logger.info(
-        "jwt_payload_times iat=%s exp=%s tokenExp=%s now=%s",
-        iat,
-        exp,
-        token_exp,
-        now,
-    )
-    if iat is None or exp is None or token_exp is None:
-        logger.error("auth rc=15 name=SDKERR_UNAUTHENTICATION reason=missing_fields")
-        raise ValueError("JWT payload missing required time fields")
-    if exp <= now or token_exp <= now:
-        logger.error("auth rc=15 name=SDKERR_UNAUTHENTICATION reason=time_invalid")
-        raise ValueError("JWT time validation failed")
-
-
-def generate_signature(meeting_id: str) -> str:
-    if not SDK_KEY or not SDK_SECRET:
-        raise ValueError("Missing ZOOM_MEETING_SDK_KEY or ZOOM_MEETING_SDK_SECRET")
-    now = int(time.time())
-    payload = _build_sdk_auth_payload(now)
-
-    token = jwt.encode(payload, SDK_SECRET, algorithm="HS256")
-    if isinstance(token, bytes):
-        token = token.decode("utf-8")
-    decoded_payload = _decode_jwt_payload(token)
-    logger.info("jwt_mode=sdk_auth payload=%s", decoded_payload)
-    _log_payload_times(decoded_payload)
-    return token
+def fetch_meeting_sdk_signature() -> str:
+    if not OAUTH_BASE_URL or not MEETAI_API_KEY:
+        raise ValueError("Missing OAUTH_BASE_URL or MEETAI_API_KEY")
+    url = f"{OAUTH_BASE_URL.rstrip('/')}/token/meeting-sdk-jwt"
+    response = requests.get(url, headers={"X-API-Key": MEETAI_API_KEY}, timeout=20)
+    if response.status_code != 200:
+        logger.error(
+            "oauth_signature_error status=%s body=%s",
+            response.status_code,
+            response.text,
+        )
+        raise ValueError("Failed to fetch meeting SDK signature")
+    payload = response.json()
+    signature = payload.get("signature")
+    if not signature:
+        raise ValueError("Signature missing in OAuth response")
+    decoded_payload = _decode_jwt_payload(signature)
+    if decoded_payload:
+        logger.info("jwt_mode=remote payload=%s", decoded_payload)
+    return signature
 
 
 @app.post("/join")
@@ -280,9 +257,9 @@ async def join_meeting(payload: JoinRequest):
 
     passcode = parse_passcode(payload.meeting_url, payload.passcode)
     try:
-        signature = generate_signature(meeting_id)
+        signature = fetch_meeting_sdk_signature()
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     decoded_payload = _decode_jwt_payload(signature)
     now = int(time.time())

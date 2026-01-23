@@ -5,6 +5,29 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
+import requests
+
+
+def fetch_meeting_sdk_signature() -> str:
+    oauth_base_url = os.getenv("OAUTH_BASE_URL", "").rstrip("/")
+    api_key = os.getenv("MEETAI_API_KEY", "")
+    if not oauth_base_url or not api_key:
+        raise RuntimeError("Missing OAUTH_BASE_URL or MEETAI_API_KEY")
+    url = f"{oauth_base_url}/token/meeting-sdk-jwt"
+    response = requests.get(url, headers={"X-API-Key": api_key}, timeout=20)
+    if response.status_code != 200:
+        logging.error(
+            "signature_fetch_failed status=%s body=%s",
+            response.status_code,
+            response.text,
+        )
+        raise RuntimeError("Failed to fetch meeting SDK signature")
+    payload = response.json()
+    signature = payload.get("signature")
+    if not signature:
+        raise RuntimeError("Signature missing in OAuth response")
+    return signature
+
 
 def process_job(job: Dict[str, Any]) -> None:
     meeting_id = str(job.get("meeting_id"))
@@ -20,6 +43,13 @@ def process_job(job: Dict[str, Any]) -> None:
     recorder_path = Path("/app/bin/zoom_bot_recorder")
     if not recorder_path.exists():
         raise FileNotFoundError("zoom_bot_recorder not found at /app/bin/zoom_bot_recorder")
+
+    if not signature:
+        try:
+            signature = fetch_meeting_sdk_signature()
+        except RuntimeError:
+            logging.exception("job_failed signature_fetch_error meeting_id=%s", meeting_id)
+            return
 
     logging.info("join_meeting meeting_id=%s display_name=%s mode=%s", meeting_id, display_name, mode)
 

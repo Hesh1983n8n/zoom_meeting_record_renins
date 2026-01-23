@@ -2,6 +2,23 @@ FROM ubuntu:22.04 AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake ca-certificates pkg-config \
+    libx11-dev \
+    libxcb1-dev \
+    libxcb-xfixes0-dev \
+    libxcb-shape0-dev \
+    libxcb-shm0-dev \
+    libxcb-randr0-dev \
+    libxcb-image0-dev \
+    libxcb-keysyms1-dev \
+    libxcb-xtest0-dev \
+    libxcb-util0-dev \
+    libxfixes-dev \
+    libdbus-1-dev \
+    libgl1-mesa-dev \
+    libgbm-dev \
+    libdrm-dev \
+    libglib2.0-dev \
+    libatomic1 \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -34,6 +51,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcb-image0 \
     libxcb-keysyms1 \
     libxcb-xtest0 \
+    libxcb-util1 \
     libglib2.0-0 \
     libgbm1 \
     libdrm2 \

@@ -9,9 +9,33 @@ if(NOT DEFINED SDK_ROOT)
 endif()
 message(STATUS "SDK_ROOT=${SDK_ROOT}")
 
+find_package(Threads REQUIRED)
+find_package(X11 REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(DBUS REQUIRED dbus-1)
+pkg_check_modules(XCB REQUIRED xcb)
+pkg_check_modules(XCB_RANDR REQUIRED xcb-randr)
+pkg_check_modules(XCB_SHM REQUIRED xcb-shm)
+pkg_check_modules(XCB_XFIXES REQUIRED xcb-xfixes)
+pkg_check_modules(XCB_SHAPE REQUIRED xcb-shape)
+pkg_check_modules(XCB_IMAGE REQUIRED xcb-image)
+pkg_check_modules(XCB_KEYSYMS REQUIRED xcb-keysyms)
+pkg_check_modules(XCB_XTEST REQUIRED xcb-xtest)
+pkg_check_modules(XCB_UTIL REQUIRED xcb-util)
+
 include_directories(
   ${SDK_ROOT}/h
   ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${DBUS_INCLUDE_DIRS}
+  ${XCB_INCLUDE_DIRS}
+  ${XCB_RANDR_INCLUDE_DIRS}
+  ${XCB_SHM_INCLUDE_DIRS}
+  ${XCB_XFIXES_INCLUDE_DIRS}
+  ${XCB_SHAPE_INCLUDE_DIRS}
+  ${XCB_IMAGE_INCLUDE_DIRS}
+  ${XCB_KEYSYMS_INCLUDE_DIRS}
+  ${XCB_XTEST_INCLUDE_DIRS}
+  ${XCB_UTIL_INCLUDE_DIRS}
 )
 
 add_executable(zoom_bot
@@ -32,6 +56,25 @@ set_target_properties(meetingsdk PROPERTIES IMPORTED_LOCATION "${SDK_ROOT}/libme
 
 target_link_options(zoom_bot PRIVATE "-Wl,--no-as-needed")
 target_link_options(zoom_bot PRIVATE "-Wl,-rpath,${SDK_ROOT}" "-Wl,-rpath,${SDK_ROOT}/qt_libs/Qt/lib")
-target_link_libraries(zoom_bot PRIVATE meetingsdk pthread dl)
+target_link_libraries(zoom_bot PRIVATE
+  meetingsdk
+  Threads::Threads
+  dl
+  X11
+  Xfixes
+  ${DBUS_LIBRARIES}
+  ${XCB_LIBRARIES}
+  ${XCB_RANDR_LIBRARIES}
+  ${XCB_SHM_LIBRARIES}
+  ${XCB_XFIXES_LIBRARIES}
+  ${XCB_SHAPE_LIBRARIES}
+  ${XCB_IMAGE_LIBRARIES}
+  ${XCB_KEYSYMS_LIBRARIES}
+  ${XCB_XTEST_LIBRARIES}
+  ${XCB_UTIL_LIBRARIES}
+  GL
+  gbm
+  drm
+)
 
 install(TARGETS zoom_bot RUNTIME DESTINATION /usr/local/bin)

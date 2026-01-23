@@ -5,15 +5,25 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      HOME: /data
+      ZOOMSDK_HOME: /data
+      BOT_PORT: "3667"
+      RECORDS_DIR: /records
+      LD_LIBRARY_PATH: /opt/sdk:/opt/sdk/qt_libs/Qt/lib:/opt/sdk/qt_libs
     ports:
       - "3667:3667"
     volumes:
       - "E:/Docker_Prod/ReninsMeet/records:/records"
+      - "./zoomsdk:/data"
+    restart: unless-stopped
   web:
     build:
       context: ./services/web
     env_file:
       - .env
+    environment:
+      BOT_BASE_URL: http://bot:3667
     ports:
       - "8080:8080"
     depends_on:

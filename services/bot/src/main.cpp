@@ -1,9 +1,13 @@
+#include <atomic>
+#include <chrono>
 #include <cerrno>
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <optional>
 #include <string>
+#include <thread>
 
 #include "http_server.h"
 #include "recorder.h"
@@ -75,8 +79,21 @@ std::string StateToString(RecorderState state) {
 }
 }
 
+std::atomic<bool>* g_running = nullptr;
+
+void HandleSignal(int) {
+  if (g_running) {
+    g_running->store(false);
+  }
+}
+
 int main() {
   try {
+    std::atomic<bool> running{true};
+    g_running = &running;
+    std::signal(SIGINT, HandleSignal);
+    std::signal(SIGTERM, HandleSignal);
+
     RecorderConfig config;
     config.records_dir = GetEnvOrDefault("RECORDS_DIR", "/records");
     config.final_mix_enable = GetEnvBool("FINAL_MIX_ENABLE", true);
@@ -132,6 +149,11 @@ int main() {
       return HttpResponse{200, "{\"status\":\"ok\"}", "application/json"};
     });
 
+    server.AddRoute("POST", "/api/v1/shutdown", [&](const HttpRequest&) {
+      running.store(false);
+      return HttpResponse{200, "{\"status\":\"ok\"}", "application/json"};
+    });
+
     server.AddRoute("GET", "/api/v1/status", [&](const HttpRequest&) {
       RecorderStatus status = zoom_client.Status();
       std::string body = "{\"state\":\"" + StateToString(status.state) + "\",\"participants\":" +
@@ -156,11 +178,8 @@ int main() {
     }
 
     std::cout << "Zoom bot recorder listening on port " << port << std::endl;
-    std::string line;
-    while (std::getline(std::cin, line)) {
-      if (line == "quit") {
-        break;
-      }
+    while (running.load()) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     server.Stop();
     return 0;

@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -gt 0 ]]; then
+  exec "$@"
+fi
+
+if [[ -z "${HOME:-}" ]]; then
+  export HOME=/data
+fi
+mkdir -p "${HOME}/.zoomsdk/logs"
+
+echo "[entrypoint] HOME=${HOME}"
 echo "[entrypoint] BOT_PORT=${BOT_PORT:-}"
 echo "[entrypoint] LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"
 
@@ -37,7 +47,7 @@ else
 fi
 
 echo "[entrypoint] starting zoom_bot"
-/usr/local/bin/zoom_bot
-rc=$?
+stdbuf -oL -eL /usr/local/bin/zoom_bot 2>&1 | tee /tmp/zoom_bot.log
+rc=${PIPESTATUS[0]}
 echo "[entrypoint] zoom_bot exited with code $rc"
 exit $rc

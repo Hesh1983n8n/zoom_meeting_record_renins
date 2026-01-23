@@ -6,6 +6,7 @@ import requests
 app = Flask(__name__)
 
 AUTH_BASE_URL = os.environ.get("AUTH_BASE_URL", "https://mymeetai.site")
+AUTH_TOKEN_ENDPOINT = os.environ.get("AUTH_TOKEN_ENDPOINT", "/token/meeting-sdk-jwt")
 AUTH_API_KEY = os.environ.get("AUTH_API_KEY", "")
 BOT_BASE_URL = os.environ.get("BOT_BASE_URL", "http://bot:3667")
 BOT_DISPLAY_NAME = os.environ.get("BOT_DISPLAY_NAME", "Renins Bot")
@@ -35,7 +36,30 @@ def status():
         resp = requests.get(f"{BOT_BASE_URL}/api/v1/status", timeout=5)
         return jsonify(resp.json())
     except requests.RequestException:
-        return jsonify({"state": "error", "error": "bot_unreachable"}), 502
+        return jsonify({"ok": False, "error": "BOT_UNAVAILABLE"}), 502
+
+
+def fetch_meeting_sdk_jwt():
+    headers = {"Accept": "application/json"}
+    if AUTH_API_KEY:
+        headers["Authorization"] = f"Bearer {AUTH_API_KEY}"
+    url = f"{AUTH_BASE_URL}{AUTH_TOKEN_ENDPOINT}"
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+    except requests.RequestException:
+        return None, "AUTH_UNAVAILABLE"
+
+    try:
+        data = resp.json()
+    except ValueError:
+        return None, "INVALID_AUTH_RESPONSE"
+
+    for key in ("token", "sdk_jwt", "meeting_sdk_jwt"):
+        token = data.get(key)
+        if token:
+            return token, None
+    return None, "INVALID_AUTH_RESPONSE"
 
 
 @app.route("/api/start", methods=["POST"])
@@ -54,26 +78,23 @@ def start():
     if passcode:
         pwd = passcode
 
-    token_resp = requests.post(
-        f"{AUTH_BASE_URL}/api/zoom/meeting-sdk-token",
-        headers={"Authorization": f"Bearer {AUTH_API_KEY}"},
-        json={"meeting_number": meeting_number},
-        timeout=10,
-    )
-    token_resp.raise_for_status()
-    token_data = token_resp.json()
+    sdk_jwt, error = fetch_meeting_sdk_jwt()
+    if error:
+        return jsonify({"ok": False, "error": error}), 502
 
     payload = {
         "meeting_url": meeting_url,
         "passcode": pwd,
         "display_name": BOT_DISPLAY_NAME,
-        "sdk_auth_token": token_data.get("sdk_auth_token"),
-        "recording_token": token_data.get("recording_token"),
+        "auth": {"sdk_auth_token": sdk_jwt},
     }
 
-    bot_resp = requests.post(f"{BOT_BASE_URL}/api/v1/join", json=payload, timeout=10)
-    bot_resp.raise_for_status()
-    return jsonify({"status": "ok"})
+    try:
+        bot_resp = requests.post(f"{BOT_BASE_URL}/api/v1/join", json=payload, timeout=10)
+        bot_resp.raise_for_status()
+    except requests.RequestException:
+        return jsonify({"ok": False, "error": "BOT_UNAVAILABLE"}), 502
+    return jsonify({"ok": True})
 
 
 @app.route("/api/stop", methods=["POST"])
@@ -81,9 +102,9 @@ def stop():
     try:
         bot_resp = requests.post(f"{BOT_BASE_URL}/api/v1/leave", json={}, timeout=10)
         bot_resp.raise_for_status()
-        return jsonify({"status": "ok"})
+        return jsonify({"ok": True})
     except requests.RequestException:
-        return jsonify({"error": "bot_unreachable"}), 502
+        return jsonify({"ok": False, "error": "BOT_UNAVAILABLE"}), 502
 
 
 if __name__ == "__main__":

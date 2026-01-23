@@ -57,6 +57,7 @@ services/bot/third_party/sdk/zoom-meeting-sdk-linux_x86_64-6.7.2.7020/
 
 ```
 AUTH_BASE_URL=https://mymeetai.site
+AUTH_TOKEN_ENDPOINT=/token/meeting-sdk-jwt
 AUTH_API_KEY=***
 BOT_BASE_URL=http://bot:3667
 ```
@@ -177,3 +178,15 @@ VAD_MIN_SILENCE_MS=400
 - Токены и пароли **не логируются**.
 - В контейнерах **нет** Zoom OAuth/Client Secret.
 - Версия SDK должна быть **строго 6.7.2.7020**.
+
+## Auth (MymeetAi)
+
+Web UI получает JWT для Meeting SDK через подтверждённый endpoint:
+
+- `GET https://mymeetai.site/token/meeting-sdk-jwt`
+- Swagger: https://mymeetai.site/docs
+
+Заголовки запроса:
+
+- `Authorization: Bearer <AUTH_API_KEY>` (если ключ задан)
+- `Accept: application/json`

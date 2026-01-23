@@ -1,4 +1,3 @@
-import json
 import os
 import re
 from flask import Flask, jsonify, render_template, request
@@ -8,8 +7,7 @@ app = Flask(__name__)
 
 AUTH_BASE_URL = os.environ.get("AUTH_BASE_URL", "https://mymeetai.site")
 AUTH_TOKEN_ENDPOINT = os.environ.get("AUTH_TOKEN_ENDPOINT", "/token/meeting-sdk-jwt")
-AUTH_API_KEY = os.environ.get("AUTH_API_KEY", "")
-AUTH_HEADER = os.environ.get("AUTH_HEADER", "")
+MEETAI_API_KEY = os.environ.get("MEETAI_API_KEY")
 BOT_BASE_URL = os.environ.get("BOT_BASE_URL", "http://bot:3667")
 BOT_DISPLAY_NAME = os.environ.get("BOT_DISPLAY_NAME", "Renins Bot")
 
@@ -72,34 +70,58 @@ def mask_jwts(text: str) -> str:
 
 
 def build_auth_headers():
-    headers = {"Accept": "application/json"}
-    if AUTH_HEADER:
-        headers["Authorization"] = AUTH_HEADER
-    elif AUTH_API_KEY:
-        headers["Authorization"] = f"Bearer {AUTH_API_KEY}"
-    return headers
+    if not MEETAI_API_KEY:
+        return None
+    return {"Accept": "application/json", "Authorization": f"Bearer {MEETAI_API_KEY}"}
 
 
-def fetch_meeting_sdk_jwt():
-    headers = {"Accept": "application/json"}
-    headers.update(build_auth_headers())
-    url = f"{AUTH_BASE_URL}{AUTH_TOKEN_ENDPOINT}"
+def fetch_meetai_token():
+    if not MEETAI_API_KEY:
+        return None, {
+            "ok": False,
+            "error": "AUTH_MISCONFIGURED",
+            "details": "MEETAI_API_KEY is not set",
+        }
+
+    auth_url = f"{AUTH_BASE_URL}{AUTH_TOKEN_ENDPOINT}"
+    headers = build_auth_headers()
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
-        resp.raise_for_status()
-    except requests.RequestException:
-        return None, "AUTH_UNAVAILABLE"
+        resp = requests.get(auth_url, headers=headers, timeout=10)
+    except requests.RequestException as exc:
+        return None, {
+            "ok": False,
+            "error": "AUTH_ERROR",
+            "status_code": None,
+            "details": str(exc),
+        }
+
+    if resp.status_code != 200:
+        return None, {
+            "ok": False,
+            "error": "AUTH_ERROR",
+            "status_code": resp.status_code,
+            "details": mask_jwts(resp.text[:300]),
+        }
 
     try:
         data = resp.json()
     except ValueError:
-        return None, "INVALID_AUTH_RESPONSE"
+        return None, {
+            "ok": False,
+            "error": "AUTH_ERROR",
+            "status_code": resp.status_code,
+            "details": "invalid JSON",
+        }
 
-    for key in ("token", "sdk_jwt", "meeting_sdk_jwt", "jwt"):
-        token = data.get(key)
-        if token:
-            return token, None
-    return None, "INVALID_AUTH_RESPONSE"
+    token = data.get("meeting_sdk_jwt") or data.get("sdk_jwt") or data.get("token")
+    if not token:
+        return None, {
+            "ok": False,
+            "error": "AUTH_ERROR",
+            "status_code": resp.status_code,
+            "details": "token field not found",
+        }
+    return token, {"ok": True, "response": data, "auth_url": auth_url}
 
 
 @app.route("/api/start", methods=["POST"])
@@ -118,67 +140,10 @@ def start():
     if passcode:
         pwd = passcode
 
-    auth_url = f"{AUTH_BASE_URL}{AUTH_TOKEN_ENDPOINT}"
-    headers = build_auth_headers()
-    try:
-        auth_resp = requests.get(auth_url, headers=headers, timeout=10)
-        status_code = auth_resp.status_code
-        auth_resp.raise_for_status()
-    except requests.RequestException as exc:
-        snippet = ""
-        if "auth_resp" in locals() and getattr(auth_resp, "text", None):
-            snippet = mask_jwts(auth_resp.text[:300])
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "error": "AUTH_ERROR",
-                    "auth_url": auth_url,
-                    "status_code": status_code if "status_code" in locals() else None,
-                    "details": str(exc),
-                    "response_snippet": snippet,
-                }
-            ),
-            502,
-        )
-
-    try:
-        auth_json = auth_resp.json()
-    except ValueError:
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "error": "AUTH_ERROR",
-                    "auth_url": auth_url,
-                    "status_code": auth_resp.status_code,
-                    "details": "invalid JSON",
-                    "response_snippet": mask_jwts(auth_resp.text[:300]),
-                }
-            ),
-            502,
-        )
-
-    token = (
-        auth_json.get("token")
-        or auth_json.get("sdk_jwt")
-        or auth_json.get("meeting_sdk_jwt")
-        or auth_json.get("jwt")
-    )
-    if not token:
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "error": "AUTH_ERROR",
-                    "auth_url": auth_url,
-                    "status_code": auth_resp.status_code,
-                    "details": "token field not found",
-                    "response_snippet": mask_jwts(json.dumps(auth_json)[:300]),
-                }
-            ),
-            502,
-        )
+    token, auth_result = fetch_meetai_token()
+    if not auth_result.get("ok"):
+        status_code = 500 if auth_result["error"] == "AUTH_MISCONFIGURED" else 502
+        return jsonify(auth_result), status_code
 
     payload = {
         "meeting_url": meeting_url,
@@ -215,59 +180,19 @@ def start():
 @app.route("/api/test-auth")
 def test_auth():
     auth_url = f"{AUTH_BASE_URL}{AUTH_TOKEN_ENDPOINT}"
-    headers = build_auth_headers()
-    try:
-        auth_resp = requests.get(auth_url, headers=headers, timeout=10)
-        status_code = auth_resp.status_code
-        auth_resp.raise_for_status()
-    except requests.RequestException as exc:
-        snippet = ""
-        if "auth_resp" in locals() and getattr(auth_resp, "text", None):
-            snippet = mask_jwts(auth_resp.text[:300])
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "error": "AUTH_ERROR",
-                    "auth_url": auth_url,
-                    "status_code": status_code if "status_code" in locals() else None,
-                    "details": str(exc),
-                    "response_snippet": snippet,
-                }
-            ),
-            502,
-        )
+    token, auth_result = fetch_meetai_token()
+    if not auth_result.get("ok"):
+        status_code = 500 if auth_result["error"] == "AUTH_MISCONFIGURED" else 502
+        return jsonify(auth_result), status_code
 
-    try:
-        auth_json = auth_resp.json()
-    except ValueError:
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "error": "AUTH_ERROR",
-                    "auth_url": auth_url,
-                    "status_code": auth_resp.status_code,
-                    "details": "invalid JSON",
-                    "response_snippet": mask_jwts(auth_resp.text[:300]),
-                }
-            ),
-            502,
-        )
-
-    token = (
-        auth_json.get("token")
-        or auth_json.get("sdk_jwt")
-        or auth_json.get("meeting_sdk_jwt")
-        or auth_json.get("jwt")
-    )
+    auth_json = auth_result["response"]
     return jsonify(
         {
             "ok": True,
-            "auth_url": auth_url,
+            "auth_url": auth_result["auth_url"],
             "token_present": bool(token),
-            "token_prefix": token[:12] if token else "",
-            "keys": list(auth_json.keys()),
+            "token_prefix": token[:10] if token else "",
+            "response_keys": list(auth_json.keys()),
         }
     )
 

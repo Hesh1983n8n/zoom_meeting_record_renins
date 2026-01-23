@@ -24,6 +24,7 @@ services:
       - .env
     environment:
       BOT_BASE_URL: http://bot:3667
+      MEETAI_API_KEY: ${MEETAI_API_KEY}
     ports:
       - "8080:8080"
     depends_on:

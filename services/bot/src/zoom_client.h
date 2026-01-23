@@ -20,9 +20,11 @@ class ZoomClient {
   bool JoinMeeting(const JoinRequest& request);
   void LeaveMeeting();
   RecorderStatus Status() const;
-  bool ProbeSdkLoaded(std::string* error_message) const;
+  bool ProbeSdkLoaded(std::string* error_message);
+  void SetSdkError(const std::string& error);
 
  private:
   Recorder& recorder_;
   RecorderStatus status_{};
+  void* sdk_handle_ = nullptr;
 };

@@ -29,6 +29,12 @@ ldd /usr/local/bin/zoom_bot | grep -E "libmeetingsdk\\.so" || echo "[entrypoint]
 
 echo "[entrypoint] ldd /opt/sdk/libmeetingsdk.so:"
 ldd /opt/sdk/libmeetingsdk.so || true
+if ldd /opt/sdk/libmeetingsdk.so | grep -i 'not found'; then
+  echo "[entrypoint] ERROR: SDK deps missing" >&2
+  exit 1
+else
+  echo "[entrypoint] SDK deps OK"
+fi
 
 echo "[entrypoint] starting zoom_bot"
 exec /usr/local/bin/zoom_bot

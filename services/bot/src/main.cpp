@@ -94,12 +94,13 @@ int main() {
     std::string sdk_error;
     bool sdk_ok = zoom_client.ProbeSdkLoaded(&sdk_error);
     if (sdk_ok) {
-      std::cout << "SDK probe: ok" << std::endl;
+      std::cout << "SDK dlopen: OK" << std::endl;
     } else {
-      std::cout << "SDK probe: fail" << std::endl;
+      std::cout << "SDK dlopen: FAIL" << std::endl;
       if (!sdk_error.empty()) {
-        std::cout << "SDK probe error: " << sdk_error << std::endl;
+        std::cout << "SDK dlopen error: " << sdk_error << std::endl;
       }
+      zoom_client.SetSdkError(sdk_error.empty() ? "sdk_dlopen_failed" : sdk_error);
     }
 
     server.AddRoute("POST", "/api/v1/join", [&](const HttpRequest& req) {

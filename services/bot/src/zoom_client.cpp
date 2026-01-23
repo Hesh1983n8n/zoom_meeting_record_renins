@@ -11,6 +11,15 @@ bool ZoomClient::JoinMeeting(const JoinRequest& request) {
   status_.state = RecorderState::Joining;
   status_.error.reset();
 
+  if (!sdk_handle_) {
+    std::string error_message;
+    if (!ProbeSdkLoaded(&error_message)) {
+      status_.state = RecorderState::Error;
+      status_.error = error_message;
+      return false;
+    }
+  }
+
   // TODO: Integrate Zoom Meeting SDK 6.7.2.7020 here.
   // Use request.sdk_auth_token and request.recording_token to initialize SDK,
   // join the meeting by URL/passcode, and register raw audio callbacks.
@@ -40,8 +49,8 @@ RecorderStatus ZoomClient::Status() const {
   return current;
 }
 
-bool ZoomClient::ProbeSdkLoaded(std::string* error_message) const {
-  void* handle = dlopen("libmeetingsdk.so", RTLD_NOW);
+bool ZoomClient::ProbeSdkLoaded(std::string* error_message) {
+  void* handle = dlopen("libmeetingsdk.so", RTLD_NOW | RTLD_GLOBAL);
   if (!handle) {
     if (error_message) {
       const char* err = dlerror();
@@ -49,6 +58,11 @@ bool ZoomClient::ProbeSdkLoaded(std::string* error_message) const {
     }
     return false;
   }
-  dlclose(handle);
+  sdk_handle_ = handle;
   return true;
+}
+
+void ZoomClient::SetSdkError(const std::string& error) {
+  status_.state = RecorderState::Error;
+  status_.error = error;
 }

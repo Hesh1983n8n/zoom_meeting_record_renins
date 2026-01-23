@@ -48,7 +48,7 @@ COPY entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh
 
-ENV LD_LIBRARY_PATH=/opt/sdk:/opt/sdk/qt_libs
+ENV LD_LIBRARY_PATH=/opt/sdk:/opt/sdk/qt_libs/Qt/lib:/opt/sdk/qt_libs
 ENV RECORDS_DIR=/records
 ENV BOT_PORT=3667
 

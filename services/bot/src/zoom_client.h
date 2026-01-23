@@ -52,6 +52,6 @@ class ZoomClient {
   std::string sdk_error_;
   int last_auth_code_ = 0;
   int last_join_code_ = 0;
-  std::mutex mutex_;
-  std::condition_variable cv_;
+  mutable std::mutex mutex_;
+  mutable std::condition_variable cv_;
 };

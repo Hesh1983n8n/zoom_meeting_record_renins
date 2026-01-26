@@ -114,10 +114,9 @@ bool ZoomClient::InitSdkOnce(std::string& error_message, int& code) {
   if (sdk_inited_) {
     return true;
   }
-  ZOOMSDK::InitParam init_param;
+  ZOOMSDK::tagInitParam init_param;
   init_param.strWebDomain = "https://zoom.us";
   init_param.enableLogByDefault = true;
-  init_param.emLanguageID = ZOOMSDK::LANGUAGE_English;
   ZOOMSDK::SDKError err = ZOOMSDK::InitSDK(init_param);
   code = static_cast<int>(err);
   std::cout << "[sdk] InitSDK result=" << code << std::endl;

@@ -12,7 +12,7 @@ message(STATUS "SDK_ROOT=${SDK_ROOT}")
 if(EXISTS "${SDK_ROOT}/h")
   set(ZOOM_SDK_INCLUDE_DIR "${SDK_ROOT}/h")
 else()
-  set(ZOOM_SDK_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/services/bot/third_party/zoom_meeting_sdk/h")
+  set(ZOOM_SDK_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/zoom_meeting_sdk/h")
 endif()
 message(STATUS "Using Zoom SDK headers from: ${ZOOM_SDK_INCLUDE_DIR}")
 

@@ -69,8 +69,8 @@ class ZoomClient::MeetingEventHandler : public ZOOMSDK::IMeetingServiceEvent {
   void onMeetingStatisticsWarningNotification(ZOOMSDK::StatisticsWarningType) override {}
   void onSuspendParticipantsActivities() override {}
   void onAICompanionActiveChangeNotice(bool) override {}
-  void onMeetingTopicChanged(const ZOOMSDK::zchar_t*) override {}
-  void onMeetingFullToWatchLiveStream(const ZOOMSDK::zchar_t*) override {}
+  void onMeetingTopicChanged(const zchar_t* sTopic) override {}
+  void onMeetingFullToWatchLiveStream(const zchar_t* sLiveStreamUrl) override {}
   void onUserNetworkStatusChanged(ZOOMSDK::MeetingComponentType,
                                   ZOOMSDK::ConnectionQuality,
                                   unsigned int,

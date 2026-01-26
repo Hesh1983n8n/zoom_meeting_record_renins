@@ -20,6 +20,11 @@ std::string StripWhitespace(const std::string& value) {
 }
 
 std::basic_string<zchar_t> ToZString(const std::string& value) {
+  if constexpr (std::is_same_v<zchar_t, wchar_t>) {
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    return converter.from_bytes(value);
+  } else {
+    return std::basic_string<zchar_t>(value.begin(), value.end());
   if constexpr (std::is_same_v<zchar_t, char>) {
     return value;
   } else {

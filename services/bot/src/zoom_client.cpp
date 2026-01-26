@@ -24,12 +24,10 @@ std::basic_string<zchar_t> ToZString(const std::string& value) {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     return converter.from_bytes(value);
   } else {
-    // zchar_t == char (или другой 1-байтовый тип) — просто копируем байты
     return std::basic_string<zchar_t>(value.begin(), value.end());
   }
 }
 
-}
 }
 
 class ZoomClient::AuthEventHandler : public ZOOMSDK::IAuthServiceEvent {

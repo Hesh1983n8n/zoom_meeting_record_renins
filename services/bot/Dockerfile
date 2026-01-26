@@ -40,7 +40,7 @@ RUN cmake -S /app -B /app/build -DSDK_ROOT=/opt/sdk -DCMAKE_VERBOSE_MAKEFILE=ON 
 FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl procps \
+    ca-certificates curl pciutils procps \
     libatomic1 \
     libx11-6 \
     libxcb1 \

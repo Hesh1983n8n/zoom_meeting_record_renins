@@ -3,11 +3,15 @@
 #include <algorithm>
 #include <chrono>
 #include <codecvt>
+#include <cctype>
+#include <cstdlib>
 #include <dlfcn.h>
+#include <filesystem>
 #include <iostream>
 #include <locale>
 #include <regex>
 #include <type_traits>
+#include <vector>
 
 #include "meeting_url.h"
 #include "zoom_sdk.h"
@@ -39,6 +43,135 @@ struct ZStringConverter<wchar_t> {
 
 static std::basic_string<zchar_t> ToZString(const std::string& value) {
   return ZStringConverter<zchar_t>::Convert(value);
+}
+
+std::string SdkErrorToString(ZOOMSDK::SDKError err) {
+  switch (err) {
+    case ZOOMSDK::SDKERR_SUCCESS:
+      return "SDKERR_SUCCESS";
+    case ZOOMSDK::SDKERR_NO_IMPL:
+      return "SDKERR_NO_IMPL";
+    case ZOOMSDK::SDKERR_WRONG_USAGE:
+      return "SDKERR_WRONG_USAGE";
+    case ZOOMSDK::SDKERR_INVALID_PARAMETER:
+      return "SDKERR_INVALID_PARAMETER";
+    case ZOOMSDK::SDKERR_MODULE_LOAD_FAILED:
+      return "SDKERR_MODULE_LOAD_FAILED";
+    case ZOOMSDK::SDKERR_MEMORY_FAILED:
+      return "SDKERR_MEMORY_FAILED";
+    case ZOOMSDK::SDKERR_SERVICE_FAILED:
+      return "SDKERR_SERVICE_FAILED";
+    case ZOOMSDK::SDKERR_UNINITIALIZE:
+      return "SDKERR_UNINITIALIZE";
+    case ZOOMSDK::SDKERR_UNAUTHENTICATION:
+      return "SDKERR_UNAUTHENTICATION";
+    case ZOOMSDK::SDKERR_INTERNAL_ERROR:
+      return "SDKERR_INTERNAL_ERROR";
+    default:
+      return "SDKERR_UNKNOWN";
+  }
+}
+
+std::string ToLowerCopy(const std::string& value) {
+  std::string lowered = value;
+  std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  return lowered;
+}
+
+std::string ResolveHomeDir() {
+  const char* home = std::getenv("HOME");
+  if (home && *home) {
+    return home;
+  }
+  return "/data";
+}
+
+void LogHomeContents(const std::string& home_dir) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  std::cout << "[auth] HOME=" << home_dir << std::endl;
+  if (!fs::exists(home_dir, ec)) {
+    std::cout << "[auth] HOME does not exist" << std::endl;
+    return;
+  }
+  for (const auto& entry :
+       fs::directory_iterator(home_dir, fs::directory_options::skip_permission_denied, ec)) {
+    if (ec) {
+      std::cout << "[auth] HOME listing failed: " << ec.message() << std::endl;
+      return;
+    }
+    std::string type = "other";
+    if (entry.is_directory(ec)) {
+      type = "dir";
+    } else if (entry.is_regular_file(ec)) {
+      type = "file";
+    } else if (entry.is_symlink(ec)) {
+      type = "symlink";
+    }
+    std::cout << "[auth] HOME entry (" << type << "): " << entry.path().filename().string()
+              << std::endl;
+  }
+  if (ec) {
+    std::cout << "[auth] HOME listing failed: " << ec.message() << std::endl;
+  }
+}
+
+void MaybeResetZoomProfileOnAuthFailure(const std::string& home_dir) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  const std::vector<std::string> dir_whitelist = {".zoom", "ZoomSDK", "zoomsdk"};
+  const std::vector<std::string> file_exts = {".db", ".sqlite", ".sqlite3"};
+
+  std::cout << "[auth] attempting zoom profile cleanup in " << home_dir << std::endl;
+  if (!fs::exists(home_dir, ec)) {
+    std::cout << "[auth] cleanup skipped: HOME does not exist" << std::endl;
+    return;
+  }
+
+  for (const auto& entry :
+       fs::directory_iterator(home_dir, fs::directory_options::skip_permission_denied, ec)) {
+    if (ec) {
+      std::cout << "[auth] cleanup listing failed: " << ec.message() << std::endl;
+      return;
+    }
+    const fs::path path = entry.path();
+    const std::string name = path.filename().string();
+    if (entry.is_directory(ec) &&
+        std::find(dir_whitelist.begin(), dir_whitelist.end(), name) != dir_whitelist.end()) {
+      std::error_code remove_ec;
+      fs::remove_all(path, remove_ec);
+      if (remove_ec) {
+        std::cout << "[auth] failed to remove directory " << name << ": " << remove_ec.message()
+                  << std::endl;
+      } else {
+        std::cout << "[auth] removed directory " << name << std::endl;
+      }
+      continue;
+    }
+
+    if (entry.is_regular_file(ec)) {
+      const std::string lowered = ToLowerCopy(name);
+      const std::string extension = ToLowerCopy(path.extension().string());
+      const bool ext_allowed =
+          std::find(file_exts.begin(), file_exts.end(), extension) != file_exts.end();
+      const bool name_allowed = lowered.find("zoom") != std::string::npos;
+      if (ext_allowed && name_allowed) {
+        std::error_code remove_ec;
+        fs::remove(path, remove_ec);
+        if (remove_ec) {
+          std::cout << "[auth] failed to remove file " << name << ": " << remove_ec.message()
+                    << std::endl;
+        } else {
+          std::cout << "[auth] removed file " << name << std::endl;
+        }
+      }
+    }
+  }
+  if (ec) {
+    std::cout << "[auth] cleanup listing failed: " << ec.message() << std::endl;
+  }
 }
 
 }  // namespace
@@ -177,32 +310,52 @@ bool ZoomClient::SdkAuth(const std::string& jwt, std::string& error_message, int
   if (!InitSdkOnce(error_message, code)) {
     return false;
   }
-  ZOOMSDK::IAuthService* auth_service = nullptr;
-  ZOOMSDK::SDKError err = ZOOMSDK::CreateAuthService(&auth_service);
-  code = static_cast<int>(err);
-  std::cout << "[auth] CreateAuthService result=" << code << std::endl;
-  if (err != ZOOMSDK::SDKERR_SUCCESS || !auth_service) {
-    error_message = "CreateAuthService failed";
-    return false;
+  ZOOMSDK::IAuthService* auth_service = auth_service_;
+  ZOOMSDK::SDKError err = ZOOMSDK::SDKERR_SUCCESS;
+  if (!auth_service) {
+    err = ZOOMSDK::CreateAuthService(&auth_service);
+    code = static_cast<int>(err);
+    std::cout << "[auth] CreateAuthService result=" << code << " (" << SdkErrorToString(err)
+              << ")" << std::endl;
+    if (err != ZOOMSDK::SDKERR_SUCCESS || !auth_service) {
+      error_message = "CreateAuthService failed";
+      return false;
+    }
+    auth_service_ = auth_service;
   }
-  auth_service_ = auth_service;
-  auth_event_handler_ = std::make_unique<AuthEventHandler>(this);
+  if (!auth_event_handler_) {
+    auth_event_handler_ = std::make_unique<AuthEventHandler>(this);
+  }
   auth_service->SetEvent(auth_event_handler_.get());
 
   ZOOMSDK::AuthContext auth_context;
   auth_context.jwt_token = jwt_buffer_.c_str();
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    auth_done_ = false;
-    auth_ok_ = false;
-    last_auth_code_ = 0;
-  }
-  err = auth_service->SDKAuth(auth_context);
-  code = static_cast<int>(err);
-  std::cout << "[auth] SDKAuth call returned=" << code << std::endl;
+  auto attempt_auth = [&]() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      auth_done_ = false;
+      auth_ok_ = false;
+      last_auth_code_ = 0;
+    }
+    ZOOMSDK::SDKError attempt_err = auth_service->SDKAuth(auth_context);
+    code = static_cast<int>(attempt_err);
+    std::cout << "[auth] SDKAuth call returned=" << code << " ("
+              << SdkErrorToString(attempt_err) << ")" << std::endl;
+    return attempt_err;
+  };
+
+  err = attempt_auth();
   if (err != ZOOMSDK::SDKERR_SUCCESS) {
-    error_message = "SDKAuth call failed";
-    return false;
+    std::cout << "[auth] SDKAuth failed with code=" << code << " (" << SdkErrorToString(err)
+              << "), attempting profile reset" << std::endl;
+    const std::string home_dir = ResolveHomeDir();
+    LogHomeContents(home_dir);
+    MaybeResetZoomProfileOnAuthFailure(home_dir);
+    err = attempt_auth();
+    if (err != ZOOMSDK::SDKERR_SUCCESS) {
+      error_message = "SDKAuth call failed";
+      return false;
+    }
   }
 
   std::unique_lock<std::mutex> lock(mutex_);

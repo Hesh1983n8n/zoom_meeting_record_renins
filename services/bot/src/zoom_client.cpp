@@ -43,7 +43,7 @@ class ZoomClient::MeetingEventHandler : public ZOOMSDK::IMeetingServiceEvent {
  public:
   explicit MeetingEventHandler(ZoomClient* owner) : owner_(owner) {}
 
-  void onMeetingStatusChanged(ZOOMSDK::MeetingStatus status, int iResult) override {
+  void onMeetingStatusChanged(ZOOMSDK::MeetingStatus status, int iResult = 0) override {
     std::lock_guard<std::mutex> lock(owner_->mutex_);
     owner_->last_join_code_ = iResult;
     std::cout << "[join] meeting status changed=" << static_cast<int>(status)
@@ -65,21 +65,19 @@ class ZoomClient::MeetingEventHandler : public ZOOMSDK::IMeetingServiceEvent {
     }
   }
 
-  void onMeetingError(ZOOMSDK::MeetingError error, int iResult) override {
-    std::lock_guard<std::mutex> lock(owner_->mutex_);
-    owner_->last_join_code_ = static_cast<int>(error);
-    owner_->join_ok_ = false;
-    owner_->join_done_ = true;
-    std::cout << "[join] meeting error=" << static_cast<int>(error)
-              << " result=" << iResult << std::endl;
-    owner_->cv_.notify_all();
-  }
-
   void onMeetingParameterNotification(const ZOOMSDK::MeetingParameter*) override {}
   void onMeetingStatisticsWarningNotification(ZOOMSDK::StatisticsWarningType) override {}
-  void onMeetingUserJoin(ZOOMSDK::IUserInfoList*) override {}
-  void onMeetingUserLeft(ZOOMSDK::IUserInfoList*) override {}
-  void onMeetingHostChangeNotification(ZOOMSDK::IUserInfo*) override {}
+  void onSuspendParticipantsActivities() override {}
+  void onAICompanionActiveChangeNotice(bool) override {}
+  void onMeetingTopicChanged(const ZOOMSDK::zchar_t*) override {}
+  void onMeetingFullToWatchLiveStream(const ZOOMSDK::zchar_t*) override {}
+  void onUserNetworkStatusChanged(ZOOMSDK::MeetingComponentType,
+                                  ZOOMSDK::ConnectionQuality,
+                                  unsigned int,
+                                  bool) override {}
+#if defined(WIN32)
+  void onAppSignalPanelUpdated(ZOOMSDK::IMeetingAppSignalHandler*) override {}
+#endif
 
  private:
   ZoomClient* owner_ = nullptr;
@@ -116,11 +114,9 @@ bool ZoomClient::InitSdkOnce(std::string& error_message, int& code) {
   if (sdk_inited_) {
     return true;
   }
-  ZOOMSDK::SDKInitParam init_param;
+  ZOOMSDK::tagInitParam init_param;
   init_param.strWebDomain = "https://zoom.us";
-  init_param.enable_log = true;
-  init_param.strLogFilePath = "/data/zoom_sdk_logs";
-  init_param.emLanguageID = ZOOMSDK::SDK_LANGUAGE_ID_LANGUAGE_English;
+  init_param.enableLogByDefault = true;
   ZOOMSDK::SDKError err = ZOOMSDK::InitSDK(init_param);
   code = static_cast<int>(err);
   std::cout << "[sdk] InitSDK result=" << code << std::endl;
@@ -218,7 +214,7 @@ bool ZoomClient::JoinMeeting(const std::string& meeting_id,
 
   ZOOMSDK::JoinParam join_param;
   join_param.userType = ZOOMSDK::SDK_UT_WITHOUT_LOGIN;
-  ZOOMSDK::JoinParam4WithoutLogin& param = join_param.param.withoutlogin;
+  ZOOMSDK::JoinParam4WithoutLogin& param = join_param.param.withoutloginuserJoin;
   param.meetingNumber = std::stoull(meeting_id);
   param.userName = display_name.c_str();
   param.psw = passcode.c_str();

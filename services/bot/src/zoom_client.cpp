@@ -19,13 +19,26 @@ std::string StripWhitespace(const std::string& value) {
   return std::regex_replace(value, std::regex(R"(\s+)"), "");
 }
 
-std::basic_string<zchar_t> ToZString(const std::string& value) {
-  if constexpr (std::is_same_v<zchar_t, char>) {
-    return std::basic_string<zchar_t>(value.begin(), value.end());
-  } else {
+template <typename T>
+struct ZStringConverter;
+
+template <>
+struct ZStringConverter<char> {
+  static std::basic_string<char> Convert(const std::string& value) {
+    return value;
+  }
+};
+
+template <>
+struct ZStringConverter<wchar_t> {
+  static std::basic_string<wchar_t> Convert(const std::string& value) {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     return converter.from_bytes(value);
   }
+};
+
+static std::basic_string<zchar_t> ToZString(const std::string& value) {
+  return ZStringConverter<zchar_t>::Convert(value);
 }
 
 }  // namespace

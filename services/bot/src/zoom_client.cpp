@@ -1,9 +1,13 @@
 #include "zoom_client.h"
 
+#include <algorithm>
 #include <chrono>
+#include <codecvt>
 #include <dlfcn.h>
 #include <iostream>
+#include <locale>
 #include <regex>
+#include <type_traits>
 
 #include "meeting_url.h"
 #include "zoom_sdk.h"
@@ -13,6 +17,15 @@
 namespace {
 std::string StripWhitespace(const std::string& value) {
   return std::regex_replace(value, std::regex(R"(\s+)"), "");
+}
+
+std::basic_string<zchar_t> ToZString(const std::string& value) {
+  if constexpr (std::is_same_v<zchar_t, char>) {
+    return value;
+  } else {
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    return converter.from_bytes(value);
+  }
 }
 }
 
@@ -43,7 +56,7 @@ class ZoomClient::MeetingEventHandler : public ZOOMSDK::IMeetingServiceEvent {
  public:
   explicit MeetingEventHandler(ZoomClient* owner) : owner_(owner) {}
 
-  void onMeetingStatusChanged(ZOOMSDK::MeetingStatus status, int iResult) override {
+  void onMeetingStatusChanged(ZOOMSDK::MeetingStatus status, int iResult = 0) override {
     std::lock_guard<std::mutex> lock(owner_->mutex_);
     owner_->last_join_code_ = iResult;
     std::cout << "[join] meeting status changed=" << static_cast<int>(status)
@@ -65,21 +78,19 @@ class ZoomClient::MeetingEventHandler : public ZOOMSDK::IMeetingServiceEvent {
     }
   }
 
-  void onMeetingError(ZOOMSDK::MeetingError error, int iResult) override {
-    std::lock_guard<std::mutex> lock(owner_->mutex_);
-    owner_->last_join_code_ = static_cast<int>(error);
-    owner_->join_ok_ = false;
-    owner_->join_done_ = true;
-    std::cout << "[join] meeting error=" << static_cast<int>(error)
-              << " result=" << iResult << std::endl;
-    owner_->cv_.notify_all();
-  }
-
   void onMeetingParameterNotification(const ZOOMSDK::MeetingParameter*) override {}
   void onMeetingStatisticsWarningNotification(ZOOMSDK::StatisticsWarningType) override {}
-  void onMeetingUserJoin(ZOOMSDK::IUserInfoList*) override {}
-  void onMeetingUserLeft(ZOOMSDK::IUserInfoList*) override {}
-  void onMeetingHostChangeNotification(ZOOMSDK::IUserInfo*) override {}
+  void onSuspendParticipantsActivities() override {}
+  void onAICompanionActiveChangeNotice(bool) override {}
+  void onMeetingTopicChanged(const zchar_t* sTopic) override {}
+  void onMeetingFullToWatchLiveStream(const zchar_t* sLiveStreamUrl) override {}
+  void onUserNetworkStatusChanged(ZOOMSDK::MeetingComponentType,
+                                  ZOOMSDK::ConnectionQuality,
+                                  unsigned int,
+                                  bool) override {}
+#if defined(WIN32)
+  void onAppSignalPanelUpdated(ZOOMSDK::IMeetingAppSignalHandler*) override {}
+#endif
 
  private:
   ZoomClient* owner_ = nullptr;
@@ -116,11 +127,9 @@ bool ZoomClient::InitSdkOnce(std::string& error_message, int& code) {
   if (sdk_inited_) {
     return true;
   }
-  ZOOMSDK::SDKInitParam init_param;
+  ZOOMSDK::tagInitParam init_param;
   init_param.strWebDomain = "https://zoom.us";
-  init_param.enable_log = true;
-  init_param.strLogFilePath = "/data/zoom_sdk_logs";
-  init_param.emLanguageID = ZOOMSDK::SDK_LANGUAGE_ID_LANGUAGE_English;
+  init_param.enableLogByDefault = true;
   ZOOMSDK::SDKError err = ZOOMSDK::InitSDK(init_param);
   code = static_cast<int>(err);
   std::cout << "[sdk] InitSDK result=" << code << std::endl;
@@ -139,7 +148,18 @@ bool ZoomClient::SdkAuth(const std::string& jwt, std::string& error_message, int
     error_message = "sdk_jwt empty";
     return false;
   }
-  std::cout << "[auth] calling SDKAuth jwt_prefix=" << trimmed.substr(0, 12) << std::endl;
+  auto dot_count = std::count(trimmed.begin(), trimmed.end(), '.');
+  if (dot_count != 2) {
+    error_message = "BAD_JWT_FORMAT";
+    code = -3;
+    return false;
+  }
+  jwt_buffer_ = ToZString(trimmed);
+  std::string prefix = trimmed.substr(0, std::min<size_t>(12, trimmed.size()));
+  std::string suffix =
+      trimmed.size() > 6 ? trimmed.substr(trimmed.size() - 6) : trimmed;
+  std::cout << "[auth] calling SDKAuth jwt_len=" << jwt_buffer_.size()
+            << " jwt_prefix=" << prefix << " jwt_suffix=" << suffix << std::endl;
   if (!InitSdkOnce(error_message, code)) {
     return false;
   }
@@ -156,7 +176,7 @@ bool ZoomClient::SdkAuth(const std::string& jwt, std::string& error_message, int
   auth_service->SetEvent(auth_event_handler_.get());
 
   ZOOMSDK::AuthContext auth_context;
-  auth_context.jwt_token = trimmed.c_str();
+  auth_context.jwt_token = jwt_buffer_.c_str();
   {
     std::lock_guard<std::mutex> lock(mutex_);
     auth_done_ = false;
@@ -218,10 +238,12 @@ bool ZoomClient::JoinMeeting(const std::string& meeting_id,
 
   ZOOMSDK::JoinParam join_param;
   join_param.userType = ZOOMSDK::SDK_UT_WITHOUT_LOGIN;
-  ZOOMSDK::JoinParam4WithoutLogin& param = join_param.param.withoutlogin;
+  ZOOMSDK::JoinParam4WithoutLogin& param = join_param.param.withoutloginuserJoin;
+  display_name_z_ = ToZString(display_name);
+  passcode_z_ = ToZString(passcode);
   param.meetingNumber = std::stoull(meeting_id);
-  param.userName = display_name.c_str();
-  param.psw = passcode.c_str();
+  param.userName = display_name_z_.c_str();
+  param.psw = passcode_z_.c_str();
 
   {
     std::lock_guard<std::mutex> lock(mutex_);

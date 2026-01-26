@@ -9,6 +9,13 @@ if(NOT DEFINED SDK_ROOT)
 endif()
 message(STATUS "SDK_ROOT=${SDK_ROOT}")
 
+if(EXISTS "${SDK_ROOT}/h")
+  set(ZOOM_SDK_INCLUDE_DIR "${SDK_ROOT}/h")
+else()
+  set(ZOOM_SDK_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/zoom_meeting_sdk/h")
+endif()
+message(STATUS "Using Zoom SDK headers from: ${ZOOM_SDK_INCLUDE_DIR}")
+
 find_package(Threads REQUIRED)
 find_package(X11 REQUIRED)
 find_package(PkgConfig REQUIRED)
@@ -24,7 +31,7 @@ pkg_check_modules(XCB_XTEST REQUIRED xcb-xtest)
 pkg_check_modules(XCB_UTIL REQUIRED xcb-util)
 
 include_directories(
-  ${SDK_ROOT}/h
+  ${ZOOM_SDK_INCLUDE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${DBUS_INCLUDE_DIRS}
   ${XCB_INCLUDE_DIRS}

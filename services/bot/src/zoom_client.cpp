@@ -28,7 +28,7 @@ std::basic_string<zchar_t> ToZString(const std::string& value) {
   }
 }
 
-}
+}  // namespace
 
 class ZoomClient::AuthEventHandler : public ZOOMSDK::IAuthServiceEvent {
  public:

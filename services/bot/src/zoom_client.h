@@ -7,6 +7,7 @@
 #include <string>
 
 #include "recorder.h"
+#include "zoom_sdk_def.h"
 
 namespace ZOOMSDK {
 class IAuthService;
@@ -73,6 +74,9 @@ class ZoomClient {
   bool join_ok_ = false;
   mutable std::mutex mutex_;
   mutable std::condition_variable cv_;
+  std::basic_string<zchar_t> jwt_buffer_;
+  std::basic_string<zchar_t> display_name_z_;
+  std::basic_string<zchar_t> passcode_z_;
 
   ZOOMSDK::IAuthService* auth_service_ = nullptr;
   ZOOMSDK::IMeetingService* meeting_service_ = nullptr;

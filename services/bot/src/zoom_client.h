@@ -33,8 +33,8 @@ class ZoomClient {
 
   ZoomClient(const ZoomClient&) = delete;
   ZoomClient& operator=(const ZoomClient&) = delete;
-  ZoomClient(ZoomClient&&) noexcept;
-  ZoomClient& operator=(ZoomClient&&) noexcept;
+  ZoomClient(ZoomClient&&) = delete;
+  ZoomClient& operator=(ZoomClient&&) = delete;
 
   bool EnsureSdkLoaded(std::string& error_message);
   bool InitSdkOnce(std::string& error_message, int& code);
